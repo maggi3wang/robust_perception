@@ -42,20 +42,22 @@ from pydrake.systems.framework import AbstractValue, DiagramBuilder
 from pydrake.systems.meshcat_visualizer import MeshcatVisualizer
 from pydrake.systems.rendering import PoseBundle
 
-if __name__ == "__main__":
+def main():
     np.random.seed(42)
     random.seed(42)
-    for scene_iter in range(1000):
+    for scene_iter in range(1):
         try:
             builder = DiagramBuilder()
+
+            # Create a multibody plant and scene graph
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
                 builder, MultibodyPlant(time_step=0.001))
 
             # Add ground
             world_body = mbp.world_body()
-            ground_shape = Box(2., 2., 2.)
+            ground_shape = Box(2.0, 2.0, 2.0)
             ground_body = mbp.AddRigidBody("ground", SpatialInertia(
-                mass=10.0, p_PScm_E=np.array([0., 0., 0.]),
+                mass=10.0, p_PScm_E=np.array([0.0, 0.0, 0.0]),
                 G_SP_E=UnitInertia(1.0, 1.0, 1.0)))
             mbp.WeldFrames(world_body.body_frame(), ground_body.body_frame(),
                            RigidTransform(Isometry3(rotation=np.eye(3), translation=[0, 0, -1])))
@@ -66,14 +68,11 @@ if __name__ == "__main__":
                 ground_body, RigidTransform.Identity(), ground_shape, "ground_col",
                 CoulombFriction(0.9, 0.8))
 
+            # Parses SDF and URDF input files into a MultibodyPlant and (optionally) a SceneGraph.
             parser = Parser(mbp, scene_graph)
 
             candidate_model_files = [
-                "/Users/maggiewang/Workspace/RobotLocomotion/dataset_generation/mug_clean/mug.urdf",
-                #"/home/gizatt/drake/manipulation/models/mug_big/mug_big.urdf",
-                #"/home/gizatt/drake/manipulation/models/dish_models/bowl_6p25in_decomp/bowl_6p25in_decomp.urdf",
-                #"/home/gizatt/drake/manipulation/models/dish_models/plate_11in_decomp/plate_11in_decomp.urdf",
-                #"/home/gizatt/drake/manipulation/models/dish_models/plate_8p5in_decomp/plate_8p5in_decomp.urdf",
+                "/Users/maggiewang/Workspace/RobotLocomotion/robust_perception/dataset_generation/mug_clean/mug.urdf",
             ]
 
             n_objects = np.random.randint(3, 7)
@@ -102,6 +101,60 @@ if __name__ == "__main__":
                             visualizer.get_input_port(0))
 
             diagram = builder.Build()
+
+
+            # tree = RigidBodyTree()
+            # AddModelInstanceFromUrdfFile(
+            #     urdf_path, FloatingBaseType.kFixed, None, tree)
+            # # - Add frame for camera fixture.
+            # frame = RigidBodyFrame(
+            #     name="rgbd camera frame",
+            #     body=tree.world(),
+            #     xyz=[0, 0, 0.5],  # Ensure that the box is within range.
+            #     rpy=[0, 2 * np.pi / 4, 0])   
+            # # 2* np.pi / 4
+            # tree.addFrame(frame)
+
+            # # Create camera.
+            # camera = RgbdCamera(
+            #     name="camera", tree=tree, frame=frame,
+            #     z_near=0.5, z_far=5.0,
+            #     fov_y=2 * np.pi / 4, show_window=True)
+
+            # # - Describe state.
+            # x = np.zeros(tree.get_num_positions() + tree.get_num_velocities())
+
+            # # Allocate context and render.
+            # context = camera.CreateDefaultContext()
+            # context.FixInputPort(0, BasicVector(x))
+            # output = camera.AllocateOutput()
+            # camera.CalcOutput(context, output)
+
+            # # Get images from computed output.
+            # color_index = camera.color_image_output_port().get_index()
+            # color_image = output.get_data(color_index).get_value()
+            # color_array = color_image.data
+
+            # print('color_array: ', color_array)
+
+            # hello = color_array
+            # print('hello', hello)
+
+            # depth_index = camera.depth_image_output_port().get_index()
+            # depth_image = output.get_data(depth_index).get_value()
+            # depth_array = depth_image.data
+
+            # # Show camera info and images.
+            # print("Intrinsics:\n{}".format(camera.depth_camera_info().intrinsic_matrix()))
+            # dpi = mpl.rcParams['figure.dpi']
+            # figsize = np.array([color_image.width(), color_image.height()*2]) / dpi
+            # plt.figure(1, figsize=figsize)
+            # plt.subplot(2, 1, 1)
+            # plt.imshow(color_array)
+            # # plt.subplot(2, 1, 2)
+            # # mpl does not like singleton dimensions for single-channel images.
+            # # plt.imshow(np.squeeze(depth_array))
+            # plt.show()
 
             diagram_context = diagram.CreateDefaultContext()
             mbp_context = diagram.GetMutableSubsystemContext(
@@ -157,7 +210,6 @@ if __name__ == "__main__":
 #            print "Initial guess: ", q0
             start_time = time.time()
             solver = SnoptSolver()
-            #solver = NloptSolver()
             sid = solver.solver_type()
             # SNOPT
             prog.SetSolverOption(sid, "Print file", "test.snopt")
@@ -165,42 +217,21 @@ if __name__ == "__main__":
             prog.SetSolverOption(sid, "Major optimality tolerance", 1e-2)
             prog.SetSolverOption(sid, "Minor feasibility tolerance", 1e-3)
             prog.SetSolverOption(sid, "Scale option", 0)
-            #prog.SetSolverOption(sid, "Elastic weight", 1e1)
-            #prog.SetSolverOption(sid, "Elastic mode", "Yes")
-            # NLOPT
-            #prog.SetSolverOption(sid, "initial_step", 0.1)
-            #prog.SetSolverOption(sid, "xtol_rel", 1E-2)
-            #prog.SetSolverOption(sid, "xtol_abs", 1E-2)
-
-            #prog.SetSolverOption(sid, "Major step limit", 2)
 
             print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
             print(type(prog))
             result = mp.Solve(prog)
             print("Solve info: ", result)
             print("Solved in %f seconds" % (time.time() - start_time))
-            #print(IpoptSolver().Solve(prog))
+
             print(result.get_solver_id().name())
             q0_proj = result.GetSolution(q_dec)
-#            print "Final: ", q0_proj
+
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
             simulator.StepTo(10.0)
             q0_final = mbp.GetPositions(mbp_context).copy()
 
-            #output_dict = {"n_objects": len(poses)}
-            #for k in range(len(poses)):
-            #    offset = k*7
-            #    pose = q0[(offset):(offset+7)]
-            #    output_dict["obj_%04d" % k] = {
-            #        "class": classes[k],
-            #        "pose": pose.tolist()
-            #    }
-            #with open("tabletop_arrangements.yaml", "a") as file:
-            #    yaml.dump({"env_%d" % int(round(time.time() * 1000)):
-            #               output_dict},
-            #              file)
-#
             time.sleep(1.0)
 
         except Exception as e:
@@ -208,3 +239,6 @@ if __name__ == "__main__":
 
         except:
             print("Unhandled unnamed exception, probably sim error")
+
+if __name__ == "__main__":
+    main()
