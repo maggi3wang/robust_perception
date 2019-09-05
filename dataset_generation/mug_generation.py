@@ -10,6 +10,7 @@ import sys
 
 import pydrake
 from pydrake.common import FindResourceOrThrow
+from pydrake.geometry import FrameId
 from pydrake.common.eigen_geometry import Quaternion, AngleAxis, Isometry3
 from pydrake.geometry import (
     Box,
@@ -17,6 +18,8 @@ from pydrake.geometry import (
     SceneGraph,
     Sphere
 )
+from pydrake.geometry.render import CameraProperties, DepthCameraProperties
+
 from pydrake.math import (RollPitchYaw, RigidTransform)
 from pydrake.multibody.tree import (
     SpatialInertia,
@@ -41,6 +44,7 @@ from pydrake.systems.analysis import Simulator
 from pydrake.systems.framework import AbstractValue, DiagramBuilder
 from pydrake.systems.meshcat_visualizer import MeshcatVisualizer
 from pydrake.systems.rendering import PoseBundle
+import pydrake.systems.sensors as mut
 
 def main():
     np.random.seed(42)
@@ -93,68 +97,43 @@ def main():
             mbp.AddForceElement(UniformGravityFieldElement())
             mbp.Finalize()
 
-            visualizer = builder.AddSystem(MeshcatVisualizer(
-                scene_graph,
-                zmq_url="tcp://127.0.0.1:6000",
-                draw_period=0.001))
-            builder.Connect(scene_graph.get_pose_bundle_output_port(),
-                            visualizer.get_input_port(0))
+            # visualizer = builder.AddSystem(MeshcatVisualizer(
+            #     scene_graph,
+            #     zmq_url="tcp://127.0.0.1:6000",
+            #     draw_period=0.001))
+            # builder.Connect(scene_graph.get_pose_bundle_output_port(),
+            #                 visualizer.get_input_port(0))
 
+            # diagram = builder.Build()
+
+            # Use HDTV size.
+            width = 1280
+            height = 720
+
+            color_properties = CameraProperties(
+                width=width, height=height, fov_y=np.pi/6,
+                renderer_name="renderer")
+            depth_properties = DepthCameraProperties(
+                width=width, height=height, fov_y=np.pi/6,
+                renderer_name="renderer", z_near=0.1, z_far=5.5)
+
+            # Put it at the origin.
+            X_WB = RigidTransform()
+            # This id would fail if we tried to render; no such id exists.
+            parent_id = FrameId.get_new_id()
+            camera_poses = mut.RgbdSensor.CameraPoses(
+                X_BC=RigidTransform(), X_BD=RigidTransform())
+            sensor = mut.RgbdSensor(parent_id=parent_id, X_PB=X_WB,
+                                    color_properties=color_properties,
+                                    depth_properties=depth_properties,
+                                    camera_poses=camera_poses,
+                                    show_window=True)
+
+            visualizer = builder.AddSystem(sensor)
+            # OutputPort src, InputPort dest
+            builder.Connect(scene_graph.get_query_output_port(),
+                visualizer.query_object_input_port())
             diagram = builder.Build()
-
-
-            # tree = RigidBodyTree()
-            # AddModelInstanceFromUrdfFile(
-            #     urdf_path, FloatingBaseType.kFixed, None, tree)
-            # # - Add frame for camera fixture.
-            # frame = RigidBodyFrame(
-            #     name="rgbd camera frame",
-            #     body=tree.world(),
-            #     xyz=[0, 0, 0.5],  # Ensure that the box is within range.
-            #     rpy=[0, 2 * np.pi / 4, 0])   
-            # # 2* np.pi / 4
-            # tree.addFrame(frame)
-
-            # # Create camera.
-            # camera = RgbdCamera(
-            #     name="camera", tree=tree, frame=frame,
-            #     z_near=0.5, z_far=5.0,
-            #     fov_y=2 * np.pi / 4, show_window=True)
-
-            # # - Describe state.
-            # x = np.zeros(tree.get_num_positions() + tree.get_num_velocities())
-
-            # # Allocate context and render.
-            # context = camera.CreateDefaultContext()
-            # context.FixInputPort(0, BasicVector(x))
-            # output = camera.AllocateOutput()
-            # camera.CalcOutput(context, output)
-
-            # # Get images from computed output.
-            # color_index = camera.color_image_output_port().get_index()
-            # color_image = output.get_data(color_index).get_value()
-            # color_array = color_image.data
-
-            # print('color_array: ', color_array)
-
-            # hello = color_array
-            # print('hello', hello)
-
-            # depth_index = camera.depth_image_output_port().get_index()
-            # depth_image = output.get_data(depth_index).get_value()
-            # depth_array = depth_image.data
-
-            # # Show camera info and images.
-            # print("Intrinsics:\n{}".format(camera.depth_camera_info().intrinsic_matrix()))
-            # dpi = mpl.rcParams['figure.dpi']
-            # figsize = np.array([color_image.width(), color_image.height()*2]) / dpi
-            # plt.figure(1, figsize=figsize)
-            # plt.subplot(2, 1, 1)
-            # plt.imshow(color_array)
-            # # plt.subplot(2, 1, 2)
-            # # mpl does not like singleton dimensions for single-channel images.
-            # # plt.imshow(np.squeeze(depth_array))
-            # plt.show()
 
             diagram_context = diagram.CreateDefaultContext()
             mbp_context = diagram.GetMutableSubsystemContext(
@@ -193,12 +172,11 @@ def main():
 
             def vis_callback(x):
                 mbp.SetPositions(mbp_context, x)
-                pose_bundle = scene_graph.get_pose_bundle_output_port().Eval(sg_context)
+                query_output = scene_graph.get_query_output_port().Eval(sg_context)
                 context = visualizer.CreateDefaultContext()
-                context.FixInputPort(0, AbstractValue.Make(pose_bundle))
-                #print(pose_bundle.get_pose(0))
+                # context.FixInputPort(0, AbstractValue.Make(query_output))
+                # print(query_output)
                 visualizer.Publish(context)
-                #print("Here")
 
             prog.AddVisualizationCallback(vis_callback, q_dec)
             prog.AddQuadraticErrorCost(np.eye(q0.shape[0])*1.0, q0, q_dec)
@@ -231,6 +209,37 @@ def main():
             q0_initial = q0_proj.copy()
             simulator.StepTo(10.0)
             q0_final = mbp.GetPositions(mbp_context).copy()
+
+            # sensor_context = sensor.CreateDefaultContext()
+            # output = sensor.AllocateOutput()
+            # sensor.CalcOutput(sensor_context, output)
+
+            # Get images from computed output.
+            # color_index = sensor.color_image_output_port().get_index()
+            # print('color_index: ', color_index)
+            # color_image = output.get_data(color_index).get_value()
+            # print('color_image: ', color_image)
+            # color_array = color_image.data
+            # print('color_array: ', color_array)
+
+            # hello = color_array
+            # print('hello', hello)
+
+            # depth_index = sensor.depth_image_output_port().get_index()
+            # depth_image = output.get_data(depth_index).get_value()
+            # depth_array = depth_image.data
+
+            # # Show camera info and images.
+            # print("Intrinsics:\n{}".format(sensor.depth_camera_info().intrinsic_matrix()))
+            # dpi = mpl.rcParams['figure.dpi']
+            # figsize = np.array([color_image.width(), color_image.height()*2]) / dpi
+            # plt.figure(1, figsize=figsize)
+            # plt.subplot(2, 1, 1)
+            # plt.imshow(color_array)
+            # # plt.subplot(2, 1, 2)
+            # # mpl does not like singleton dimensions for single-channel images.
+            # # plt.imshow(np.squeeze(depth_array))
+            # plt.show()
 
             time.sleep(1.0)
 
