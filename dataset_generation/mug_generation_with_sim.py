@@ -73,16 +73,18 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         self.label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
 
     def save_image(self, filename):
-        dpi = mpl.rcParams['figure.dpi']
-        figsize = np.array([self.color_image.width(), self.color_image.height()*2]) / dpi
-        plt.figure(1, figsize=figsize)
-        plt.subplot(2, 1, 1)
-        plt.imshow(self.color_image.data)
-        plt.subplot(2, 1, 2)
-        # mpl does not like singleton dimensions for single-channel images.
-        plt.imshow(np.squeeze(self.label_image.data))
-        plt.savefig(filename)
-        plt.pause(0.1)
+        color_fig = plt.imshow(self.color_image.data)
+        plt.axis('off')
+        color_fig.axes.get_xaxis().set_visible(False)
+        color_fig.axes.get_yaxis().set_visible(False)
+        plt.savefig(filename + '_color.png', bbox_inches='tight', pad_inches=0)
+
+        label_fig = plt.imshow(np.squeeze(self.label_image.data))
+        plt.axis('off')
+        label_fig.axes.get_xaxis().set_visible(False)
+        label_fig.axes.get_yaxis().set_visible(False)
+        plt.savefig(filename + '_label.png', bbox_inches='tight', pad_inches=0)
+
 
 def main():
     np.random.seed(42)
@@ -144,8 +146,6 @@ def main():
             depth_camera_properties = DepthCameraProperties(
                 width=640, height=480, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
             parent_frame_id = scene_graph.world_frame_id()
-            # TODO: read the drake docs about RgbdSensor and figure out what to set this transform to
-            # to get the camera upright and facing towards the origin.
             camera_tf = RigidTransform(p=[0, 0, 0.6], rpy=RollPitchYaw([0, np.pi, 0]))
             camera = builder.AddSystem(RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=True))
             camera.DeclarePeriodicPublish(0.1, 0.)
@@ -203,9 +203,7 @@ def main():
                 pose_bundle = scene_graph.get_pose_bundle_output_port().Eval(sg_context)
                 context = visualizer.CreateDefaultContext()
                 context.FixInputPort(0, AbstractValue.Make(pose_bundle))
-                #print(pose_bundle.get_pose(0))
                 visualizer.Publish(context)
-                #print("Here")
 
             prog.AddVisualizationCallback(vis_callback, q_dec)
             prog.AddQuadraticErrorCost(np.eye(q0.shape[0])*1.0, q0, q_dec)
@@ -229,17 +227,15 @@ def main():
             result = mp.Solve(prog)
             print("Solve info: ", result)
             print("Solved in %f seconds" % (time.time() - start_time))
-            #print(IpoptSolver().Solve(prog))
             print(result.get_solver_id().name())
             q0_proj = result.GetSolution(q_dec)
-#            print "Final: ", q0_proj
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
             simulator.StepTo(10.0)
             q0_final = mbp.GetPositions(mbp_context).copy()
 
-            print('DONE!')
-            rgb_and_label_image_visualizer.save_image('testing' + str(scene_iter) + '.png')
+            rgb_and_label_image_visualizer.save_image('testing' + str(scene_iter))
+            print('DONE with iteration ' + str(scene_iter) + '!')
             time.sleep(1.0)
 
         except Exception as e:

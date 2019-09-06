@@ -4864,3 +4864,204 @@
       33  x     33   SBS         0.10978         0.02626        -2.00000         2.00000         0.00319     40
       34  x     34   SBS         0.00417         0.02164        -2.00000         2.00000        -0.00103     41
       35  x     35   SBS         0.20187         0.03176        -2.00000         2.00000         0.00406     42
+
+         ==============================
+         S N O P T  7.4-1.2  (Feb 2015)
+         ==============================
+1
+ 
+ SNMEMA EXIT 100 -- finished successfully
+ SNMEMA INFO 104 -- memory requirements estimated
+1
+ 
+ Parameters
+ ==========
+
+ Files
+ -----
+ Solution file..........         0       Old basis file ........         0       Standard input.........         5
+ Insert file............         0       New basis file ........         0       (Printer)..............        10
+ Punch file.............         0       Backup basis file......         0       (Specs file)...........         0
+ Load file..............         0       Dump file..............         0       Standard output........         6
+
+ Frequencies
+ -----------
+ Print frequency........       100       Check frequency........        60       Save new basis map.....       100
+ Summary frequency......       100       Factorization frequency        50       Expand frequency.......     10000
+
+ QP subproblems
+ --------------
+ QPsolver Cholesky......
+ Scale tolerance........     0.900       Minor feasibility tol..  1.00E-03       Iteration limit........     10000
+ Scale option...........         0       Minor optimality  tol..  1.00E-06       Minor print level......         1
+ Crash tolerance........     0.100       Pivot tolerance........  3.25E-11       New superbasics........        99
+ Crash option...........         3       Elastic weight.........  1.00E+05
+
+ Partial pricing
+ ---------------
+ LP Partial price.......         1       Prtl price section ( A)        35       Prtl price section (-I)         7
+ QP Partial price.......         1       Prtl price section ( A)        35       Prtl price section (-I)         7
+
+ The SQP Method
+ --------------
+ Minimize...............                 Cold start.............                 Proximal Point method..         1
+ Nonlinear objectiv vars        35       Objective Row..........         1       Function precision.....  3.00E-13
+ Unbounded step size....  1.00E+20       Superbasics limit......        35       Difference interval....  5.48E-07
+ Unbounded objective....  1.00E+15       Reduced Hessian dim....        35       Central difference int.  6.70E-05
+ Major step limit.......  2.00E+00       Derivative linesearch..                 Derivative option......         1
+ Major iterations limit.      1000       Linesearch tolerance...   0.90000       Verify level...........         0
+ Minor iterations limit.       500       Penalty parameter......  0.00E+00       Major Print Level......         1
+ Time limit (secs)...... 9999999.0       Major optimality tol...  1.00E-02
+
+ Hessian Approximation
+ ---------------------
+ Full-Memory Hessian....                 Hessian updates........  99999999       Hessian frequency......  99999999
+                                                                                 Hessian flush..........  99999999
+
+ Nonlinear constraints
+ ---------------------
+ Nonlinear constraints..         6       Major feasibility tol..  1.00E-03       Violation limit........  1.00E+01
+ Nonlinear Jacobian vars        35
+
+ Miscellaneous
+ -------------
+ LU factor tolerance....      3.99       LU singularity tol.....  3.25E-11       Timing level...........         0
+ LU update tolerance....      3.99       LU swap tolerance......  1.22E-04       Debug level............         0
+ LU partial  pivoting...                 eps (machine precision)  2.22E-16       System information.....        No
+                                                                                 Sticky parameters......        No
+1
+ 
+
+ 
+
+ Matrix statistics
+ -----------------
+               Total      Normal        Free       Fixed     Bounded
+ Rows              7           1           1           5           0
+ Columns          35           0           0           0          35
+
+ No. of matrix elements                   55     Density      22.449
+ Biggest  constant element        0.0000E+00  (excluding fixed columns,
+ Smallest constant element        0.0000E+00   free rows, and RHS)
+
+ No. of objective coefficients             0
+
+ Nonlinear constraints       6     Linear constraints       1
+ Nonlinear variables        35     Linear variables         0
+ Jacobian  variables        35     Objective variables     35
+ Total constraints           7     Total variables         35
+1
+ 
+
+ 
+ The user has defined      90   out of      90   first  derivatives
+
+ Cheap test of user-supplied problem derivatives...
+
+ The constraint gradients seem to be OK.
+
+ -->  The largest discrepancy was    3.45E-04  in constraint    42
+ 
+
+ The objective  gradients seem to be OK.
+
+ Gradient projected in one direction   0.00000000000E+00
+ Difference approximation              1.55775526169E-07
+1
+ 
+ 
+
+   Itns Major Minors    Step   nCon Feasible  Optimal  MeritFunction     L+U BSwap     nS condZHZ Penalty
+     29     0     29              1  3.8E-02  5.9E-02  0.0000000E+00      12           29 4.5E+02         _  r
+     31     1      2 3.5E-02      4  3.7E-02 (1.7E-03) 6.0326404E-03      12           28 4.5E+02 2.2E+00 _  r
+     33     2      2 1.4E-05      7  3.7E-02  1.5E-01  6.0323676E-03      12           29 4.5E+02 2.2E+00 _s
+     34     3      1 4.1E-02     10  3.6E-02  2.1E-01  2.4168014E-02      12           29 4.5E+02 9.0E+00 _
+     35     4      1 5.1E-01     16  1.6E-02  2.5E-01  3.7057677E-02      12           29 4.5E+02 2.2E+01 _
+     37     5      2 1.0E+00     17  1.4E-02  1.3E-01  2.3586030E-02      12     4     30 1.8E+01 4.7E+00 _
+     39     6      2 7.1E-02     20  1.4E-02  3.2E-01  2.1031830E-02      12           29 6.1E+00 4.7E+00 _
+     40     7      1 3.6E-01     22  1.0E-02  2.2E-01  1.4207015E-02      12           29 7.0E+00 4.7E+00 _
+     41     8      1 4.6E-01     24  7.5E-03  1.6E-01  1.0448125E-02      12           29 6.2E+00 4.7E+00 _
+     42     9      1 1.0E+00     25  6.8E-03  9.7E-02  8.7669067E-03      12     3     29 7.4E+00 4.7E+00 _
+     43    10      1 1.0E+00     26  4.0E-03  1.3E-01  7.8491199E-03      12           29 1.6E+01 4.7E+00 _
+     44    11      1 4.7E-01     28  2.7E-03  3.9E-02  7.6334423E-03      12     2     29 3.2E+01 4.7E+00 _
+     45    12      1 1.0E+00     29 (3.4E-04) 2.7E-02  7.4427584E-03      12           29 1.8E+01 4.7E+00 _
+     46    13      1 1.0E+00     30 (6.7E-05) 1.5E-02  7.3893415E-03      12           29 1.4E+01 4.7E+00 _
+     47    14      1 1.0E+00     31 (8.0E-05)(8.4E-03) 7.3579251E-03      12           29 1.3E+01 4.7E+00 _
+1
+ 
+ SNOPTA EXIT   0 -- finished successfully
+ SNOPTA INFO   1 -- optimality conditions satisfied
+
+ Problem name                 drake_pr
+ No. of iterations                  47   Objective            7.3310381044E-03
+ No. of major iterations            14   Linear    obj. term  0.0000000000E+00
+ Penalty parameter           4.702E+00   Nonlinear obj. term  7.3310381044E-03
+ User function calls (total)        32
+ No. of superbasics                 29   No. of basic nonlinears             6
+ No. of degenerate steps             0   Percentage                       0.00
+ Max x                      15 9.8E-01   Max pi                      7 1.0E+00
+ Max Primal infeas           0 0.0E+00   Max Dual infeas             7 8.4E-03
+ Nonlinear constraint violn    1.6E-04
+1
+ 
+ Name           drake_pr                 Objective Value      7.3310381044E-03
+
+ Status         Optimal Soln             Iteration     47    Superbasics    29
+
+ Objective               (Min)
+ RHS
+ Ranges
+ Bounds
+
+ Section 1 - Rows
+
+  Number  ...Row.. State  ...Activity...  Slack Activity  ..Lower Limit.  ..Upper Limit.  .Dual Activity    ..i
+ 
+      36  r      1    BS          .               .                None            None         -1.0          1
+      37  r      2 A  EQ         1.00000         0.00000         1.0             1.0             0.00000      2
+      38  r      3 A  EQ         1.00000         0.00000         1.0             1.0             0.00000      3
+      39  r      4 A  EQ         1.00000         0.00000         1.0             1.0             0.00001      4
+      40  r      5 A  EQ         1.00000         0.00000         1.0             1.0             0.00000      5
+      41  r      6 A  EQ         1.00000         0.00000         1.0             1.0             0.00000      6
+      42  r      7    UL         1.00016         0.00016           None          1.0            -0.17188      7
+1
+ 
+ Section 2 - Columns
+
+  Number  .Column. State  ...Activity...  .Obj Gradient.  ..Lower Limit.  ..Upper Limit.  Reduced Gradnt    m+j
+ 
+       1  x      1   SBS         0.72523        -0.00064        -1.0             1.0            -0.00033      8
+       2  x      2   SBS        -0.10654        -0.00108        -1.0             1.0            -0.00118      9
+       3  x      3    BS         0.65590        -0.00002        -1.0             1.0             0.00010     10
+       4  x      4   SBS        -0.18022        -0.00201        -1.0             1.0            -0.00023     11
+       5  x      5   SBS         0.00725        -0.02424        -2.00000         2.00000        -0.00533     12
+       6  x      6   SBS        -0.03711        -0.05256        -2.00000         2.00000        -0.00021     13
+       7  x      7   SBS         0.10781        -0.00438        -2.00000         2.00000         0.00839     14
+       8  x      8   SBS         0.43125         0.00179        -1.0             1.0            -0.00014     15
+       9  x      9    BS         0.39593        -0.00387        -1.0             1.0             0.00006     16
+      10  x     10   SBS         0.31469         0.00053        -1.0             1.0             0.00034     17
+      11  x     11   SBS        -0.74715        -0.00080        -1.0             1.0             0.00009     18
+      12  x     12   SBS         0.02202        -0.01631        -2.00000         2.00000        -0.00023     19
+      13  x     13    BS        -0.12865        -0.07987        -2.00000         2.00000         0.00419     20
+      14  x     14   SBS         0.19810         0.05179        -2.00000         2.00000        -0.00160     21
+      15  x     15    BS         0.98176         0.00125        -1.0             1.0             0.00013     22
+      16  x     16   SBS        -0.18851         0.00643        -1.0             1.0             0.00070     23
+      17  x     17   SBS         0.00706        -0.00006        -1.0             1.0             0.00010     24
+      18  x     18   SBS        -0.02352         0.00004        -1.0             1.0             0.00002     25
+      19  x     19   SBS         0.04177         0.03654        -2.00000         2.00000         0.00475     26
+      20  x     20   SBS         0.07595         0.10724        -2.00000         2.00000         0.00210     27
+      21  x     21   SBS         0.08518        -0.03106        -2.00000         2.00000        -0.00158     28
+      22  x     22   SBS         0.04429        -0.00068        -1.0             1.0            -0.00014     29
+      23  x     23    BS        -0.94701         0.00058        -1.0             1.0             0.00035     30
+      24  x     24   SBS         0.30308         0.00150        -1.0             1.0             0.00104     31
+      25  x     25   SBS        -0.09674        -0.00133        -1.0             1.0            -0.00026     32
+      26  x     26   SBS        -0.10179        -0.02225        -2.00000         2.00000        -0.00236     33
+      27  x     27   SBS         0.09653         0.00357        -2.00000         2.00000        -0.00500     34
+      28  x     28   SBS         0.12766         0.00876        -2.00000         2.00000         0.00080     35
+      29  x     29   SBS         0.11733        -0.00154        -1.0             1.0            -0.00006     36
+      30  x     30    BS        -0.87099        -0.00056        -1.0             1.0            -0.00013     37
+      31  x     31   SBS         0.22790         0.00071        -1.0             1.0            -0.00025     38
+      32  x     32   SBS        -0.41914         0.00111        -1.0             1.0             0.00012     39
+      33  x     33   SBS         0.10977         0.02626        -2.00000         2.00000         0.00318     40
+      34  x     34   SBS         0.00416         0.02161        -2.00000         2.00000        -0.00108     41
+      35  x     35   SBS         0.20188         0.03177        -2.00000         2.00000         0.00405     42
