@@ -62,9 +62,6 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         self.label_image_input_port = \
             self._DeclareAbstractInputPort("label_image_input_port",
                                    AbstractValue.Make(Image[PixelType.kLabel16I](640, 480, 1)))
-        # self.fig = plt.figure()
-        # self.ax = plt.gca()
-        plt.draw()
         self.color_image = None
         self.label_image = None
 
@@ -131,6 +128,8 @@ def main():
                     [np.random.uniform(-0.1, 0.1),
                      np.random.uniform(-0.1, 0.1),
                      np.random.uniform(0.1, 0.2)]])
+                
+            print(poses)
 
             mbp.AddForceElement(UniformGravityFieldElement())
             mbp.Finalize()
@@ -213,9 +212,7 @@ def main():
             prog.SetInitialGuess(q_dec, q0)
             start_time = time.time()
             solver = SnoptSolver()
-            #solver = NloptSolver()
             sid = solver.solver_type()
-            # SNOPT
             prog.SetSolverOption(sid, "Print file", "test.snopt")
             prog.SetSolverOption(sid, "Major feasibility tolerance", 1e-3)
             prog.SetSolverOption(sid, "Major optimality tolerance", 1e-2)
@@ -231,8 +228,10 @@ def main():
             q0_proj = result.GetSolution(q_dec)
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
+            print('q0_initial: ', q0_initial)
             simulator.StepTo(10.0)
             q0_final = mbp.GetPositions(mbp_context).copy()
+            print('q0_final: ', q0_final)
 
             rgb_and_label_image_visualizer.save_image('testing' + str(scene_iter))
             print('DONE with iteration ' + str(scene_iter) + '!')
