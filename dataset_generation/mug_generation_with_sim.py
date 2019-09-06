@@ -65,46 +65,24 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         # self.fig = plt.figure()
         # self.ax = plt.gca()
         plt.draw()
+        self.color_image = None
+        self.label_image = None
 
     def _DoPublish(self, context, event):
-        print('in publish')
-        color_image = self.EvalAbstractInput(context, 0).get_value()
-        label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
-        color_array = color_image.data
+        self.color_image = self.EvalAbstractInput(context, 0).get_value()
+        self.label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
 
-        # label_image = self.EvalAbstractInput(context, 1).set_value(label_abstract_value)
-        # print('color_array: ', color_array)
-        # label_array = label_image.data
-        # # print('label_array: ', label_array)
-        # label_abstract_value = AbstractValue.Make(Image[PixelType.kLabel16I](640, 460, 1))
-        # label_abstract_value.set_value(label_array)
-
-        with np.nditer(label_image.mutable_data, op_flags=['readwrite']) as it:
-            for x in it:
-                x[...] = x
-
-        print(label_image.data)
-
-        self.EvalAbstractInput(context, 1).set_value(label_image)
-
+    def save_image(self, filename):
         dpi = mpl.rcParams['figure.dpi']
-        figsize = np.array([color_image.width(), color_image.height()*2]) / dpi
+        figsize = np.array([self.color_image.width(), self.color_image.height()*2]) / dpi
         plt.figure(1, figsize=figsize)
         plt.subplot(2, 1, 1)
-        plt.imshow(color_array)
+        plt.imshow(self.color_image.data)
         plt.subplot(2, 1, 2)
         # mpl does not like singleton dimensions for single-channel images.
-        # plt.imshow(np.squeeze(depth_array))
-        plt.imshow(np.squeeze(label_image.data))
-        # plt.show()
-
-        # for x in np.nditer(label_array):
-        #     if not (x == 1):
-        #         print(x)
-        # # print(rgb_image)
-        # # print(label_image)
+        plt.imshow(np.squeeze(self.label_image.data))
+        plt.savefig(filename)
         plt.pause(0.1)
-
 
 def main():
     np.random.seed(42)
@@ -174,7 +152,8 @@ def main():
             builder.Connect(scene_graph.get_query_output_port(),
                             camera.query_object_input_port())
 
-            camera_viz = builder.AddSystem(RgbAndLabelImageVisualizer(draw_timestep=0.1))
+            rgb_and_label_image_visualizer = RgbAndLabelImageVisualizer(draw_timestep=0.1)
+            camera_viz = builder.AddSystem(rgb_and_label_image_visualizer)
             builder.Connect(camera.color_image_output_port(),
                             camera_viz.get_input_port(0))
             builder.Connect(camera.label_image_output_port(),
@@ -234,8 +213,6 @@ def main():
             ik.AddMinimumDistanceConstraint(0.001, threshold_distance=1.0)
 
             prog.SetInitialGuess(q_dec, q0)
-            print("Solving")
-#            print "Initial guess: ", q0
             start_time = time.time()
             solver = SnoptSolver()
             #solver = NloptSolver()
@@ -246,14 +223,6 @@ def main():
             prog.SetSolverOption(sid, "Major optimality tolerance", 1e-2)
             prog.SetSolverOption(sid, "Minor feasibility tolerance", 1e-3)
             prog.SetSolverOption(sid, "Scale option", 0)
-            #prog.SetSolverOption(sid, "Elastic weight", 1e1)
-            #prog.SetSolverOption(sid, "Elastic mode", "Yes")
-            # NLOPT
-            #prog.SetSolverOption(sid, "initial_step", 0.1)
-            #prog.SetSolverOption(sid, "xtol_rel", 1E-2)
-            #prog.SetSolverOption(sid, "xtol_abs", 1E-2)
-
-            #prog.SetSolverOption(sid, "Major step limit", 2)
 
             print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
             print(type(prog))
@@ -269,19 +238,8 @@ def main():
             simulator.StepTo(10.0)
             q0_final = mbp.GetPositions(mbp_context).copy()
 
-            #output_dict = {"n_objects": len(poses)}
-            #for k in range(len(poses)):
-            #    offset = k*7
-            #    pose = q0[(offset):(offset+7)]
-            #    output_dict["obj_%04d" % k] = {
-            #        "class": classes[k],
-            #        "pose": pose.tolist()
-            #    }
-            #with open("tabletop_arrangements.yaml", "a") as file:
-            #    yaml.dump({"env_%d" % int(round(time.time() * 1000)):
-            #               output_dict},
-            #              file)
-#
+            print('DONE!')
+            rgb_and_label_image_visualizer.save_image('testing' + str(scene_iter) + '.png')
             time.sleep(1.0)
 
         except Exception as e:
