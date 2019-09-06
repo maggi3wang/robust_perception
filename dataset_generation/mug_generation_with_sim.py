@@ -233,7 +233,7 @@ def main():
             q0_final = mbp.GetPositions(mbp_context).copy()
             print('q0_final: ', q0_final)
 
-            rgb_and_label_image_visualizer.save_image('testing' + str(scene_iter))
+            rgb_and_label_image_visualizer.save_image('images/testing' + str(scene_iter))
             print('DONE with iteration ' + str(scene_iter) + '!')
             time.sleep(1.0)
 
