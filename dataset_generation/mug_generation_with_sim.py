@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -66,18 +67,42 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         plt.draw()
 
     def _DoPublish(self, context, event):
-        rgb_image = self.EvalAbstractInput(context, 0).get_value()
-        label_image = self.EvalAbstractInput(context, 1).get_value()
-        color_array = rgb_image.data
-        print('color_array: ', color_array)
-        label_array = label_image.data
-        print('label_array: ', label_array)
+        print('in publish')
+        color_image = self.EvalAbstractInput(context, 0).get_value()
+        label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
+        color_array = color_image.data
 
-        for x in np.nditer(label_array):
-            if not (x == 1):
-                print(x)
-        # print(rgb_image)
-        # print(label_image)
+        # label_image = self.EvalAbstractInput(context, 1).set_value(label_abstract_value)
+        # print('color_array: ', color_array)
+        # label_array = label_image.data
+        # # print('label_array: ', label_array)
+        # label_abstract_value = AbstractValue.Make(Image[PixelType.kLabel16I](640, 460, 1))
+        # label_abstract_value.set_value(label_array)
+
+        with np.nditer(label_image.mutable_data, op_flags=['readwrite']) as it:
+            for x in it:
+                x[...] = x
+
+        print(label_image.data)
+
+        self.EvalAbstractInput(context, 1).set_value(label_image)
+
+        dpi = mpl.rcParams['figure.dpi']
+        figsize = np.array([color_image.width(), color_image.height()*2]) / dpi
+        plt.figure(1, figsize=figsize)
+        plt.subplot(2, 1, 1)
+        plt.imshow(color_array)
+        plt.subplot(2, 1, 2)
+        # mpl does not like singleton dimensions for single-channel images.
+        # plt.imshow(np.squeeze(depth_array))
+        plt.imshow(np.squeeze(label_image.data))
+        # plt.show()
+
+        # for x in np.nditer(label_array):
+        #     if not (x == 1):
+        #         print(x)
+        # # print(rgb_image)
+        # # print(label_image)
         plt.pause(0.1)
 
 
