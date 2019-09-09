@@ -202,7 +202,7 @@ def train(num_epochs):
         test_acc = test()
 
         # Save the model if the test acc is greater than our current best
-        if test_ac > best_acc:
+        if test_acc > best_acc:
             save_models(epoch)
             best_acc = test_acc
 
