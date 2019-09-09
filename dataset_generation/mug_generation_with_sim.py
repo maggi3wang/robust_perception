@@ -86,7 +86,8 @@ class RgbAndLabelImageVisualizer(LeafSystem):
 def main():
     np.random.seed(42)
     random.seed(42)
-    for scene_iter in range(1):
+    max_n_objects = 5
+    for scene_iter in range(50000):
         try:
             builder = DiagramBuilder()
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
@@ -114,7 +115,7 @@ def main():
                 "/Users/maggiewang/Workspace/RobotLocomotion/robust_perception/dataset_generation/mug_clean/mug.urdf"
             ]
 
-            n_objects = np.random.randint(3, 7)
+            n_objects = (scene_iter % max_n_objects) + 1
             poses = []  # [quat, pos]
             classes = []
             for k in range(n_objects):
@@ -134,18 +135,18 @@ def main():
             mbp.AddForceElement(UniformGravityFieldElement())
             mbp.Finalize()
 
-            visualizer = builder.AddSystem(MeshcatVisualizer(
-                scene_graph,
-                zmq_url="tcp://127.0.0.1:6000",
-                draw_period=0.001))
-            builder.Connect(scene_graph.get_pose_bundle_output_port(),
-                            visualizer.get_input_port(0))
+            # visualizer = builder.AddSystem(MeshcatVisualizer(
+            #     scene_graph,
+            #     zmq_url="tcp://127.0.0.1:6000",
+            #     draw_period=0.001))
+            # builder.Connect(scene_graph.get_pose_bundle_output_port(),
+            #                 visualizer.get_input_port(0))
 
             # Add camera
             depth_camera_properties = DepthCameraProperties(
                 width=640, height=480, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
             parent_frame_id = scene_graph.world_frame_id()
-            camera_tf = RigidTransform(p=[0, 0, 0.6], rpy=RollPitchYaw([0, np.pi, 0]))
+            camera_tf = RigidTransform(p=[0.0, 0.0, 0.7], rpy=RollPitchYaw([0, np.pi, 0]))
             camera = builder.AddSystem(RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=True))
             camera.DeclarePeriodicPublish(0.1, 0.)
             builder.Connect(scene_graph.get_query_output_port(),
@@ -200,9 +201,9 @@ def main():
             def vis_callback(x):
                 mbp.SetPositions(mbp_context, x)
                 pose_bundle = scene_graph.get_pose_bundle_output_port().Eval(sg_context)
-                context = visualizer.CreateDefaultContext()
-                context.FixInputPort(0, AbstractValue.Make(pose_bundle))
-                visualizer.Publish(context)
+                # context = visualizer.CreateDefaultContext()
+                # context.FixInputPort(0, AbstractValue.Make(pose_bundle))
+                # visualizer.Publish(context)
 
             prog.AddVisualizationCallback(vis_callback, q_dec)
             prog.AddQuadraticErrorCost(np.eye(q0.shape[0])*1.0, q0, q_dec)
@@ -233,7 +234,8 @@ def main():
             q0_final = mbp.GetPositions(mbp_context).copy()
             print('q0_final: ', q0_final)
 
-            rgb_and_label_image_visualizer.save_image('images/testing' + str(scene_iter))
+            filename = 'images/classification/{}/{}_{}'.format(n_objects, n_objects, scene_iter)
+            rgb_and_label_image_visualizer.save_image(filename)
             print('DONE with iteration ' + str(scene_iter) + '!')
             time.sleep(1.0)
 
