@@ -87,7 +87,7 @@ def main():
     np.random.seed(42)
     random.seed(42)
     max_n_objects = 5
-    for scene_iter in range(50000):
+    for scene_iter in range(295, 50000):
         try:
             builder = DiagramBuilder()
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
@@ -130,7 +130,7 @@ def main():
                      np.random.uniform(-0.1, 0.1),
                      np.random.uniform(0.1, 0.2)]])
                 
-            print(poses)
+            # print(poses)
 
             mbp.AddForceElement(UniformGravityFieldElement())
             mbp.Finalize()
@@ -214,25 +214,25 @@ def main():
             start_time = time.time()
             solver = SnoptSolver()
             sid = solver.solver_type()
-            prog.SetSolverOption(sid, "Print file", "test.snopt")
+            # prog.SetSolverOption(sid, "Print file", "test.snopt")
             prog.SetSolverOption(sid, "Major feasibility tolerance", 1e-3)
             prog.SetSolverOption(sid, "Major optimality tolerance", 1e-2)
             prog.SetSolverOption(sid, "Minor feasibility tolerance", 1e-3)
             prog.SetSolverOption(sid, "Scale option", 0)
 
-            print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
+            # print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
             print(type(prog))
             result = mp.Solve(prog)
-            print("Solve info: ", result)
-            print("Solved in %f seconds" % (time.time() - start_time))
+            # print("Solve info: ", result)
+            # print("Solved in %f seconds" % (time.time() - start_time))
             print(result.get_solver_id().name())
             q0_proj = result.GetSolution(q_dec)
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
-            print('q0_initial: ', q0_initial)
+            # print('q0_initial: ', q0_initial)
             simulator.StepTo(10.0)
             q0_final = mbp.GetPositions(mbp_context).copy()
-            print('q0_final: ', q0_final)
+            # print('q0_final: ', q0_final)
 
             filename = 'images/classification/{}/{}_{}'.format(n_objects, n_objects, scene_iter)
             rgb_and_label_image_visualizer.save_image(filename)
