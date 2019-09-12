@@ -87,7 +87,7 @@ def main():
     np.random.seed(42)
     random.seed(42)
     max_n_objects = 5
-    for scene_iter in range(295, 50000):
+    for scene_iter in range(870, 50000):
         try:
             builder = DiagramBuilder()
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
