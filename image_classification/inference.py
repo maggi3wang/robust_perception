@@ -10,6 +10,7 @@ from io import open, BytesIO
 import os
 from PIL import Image, ImageFile
 import json
+import numpy as np
 
 class Unit(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -80,7 +81,7 @@ model.load_state_dict(checkpoint)
 model.eval()
 print(model)
 
-def predict_image(image_path):
+def predict_image(image_path, num_mugs):
     print('in predict_image image_path: {}'.format(image_path))
 
     image = Image.open(image_path)
@@ -112,19 +113,42 @@ def predict_image(image_path):
     # Predict the class of the image
     output = model(input)
 
+    # Add a softmax layer to extract probabilities
+    sm = torch.nn.Softmax(dim=1)
+    probabilities = sm(output)
+
+    np.set_printoptions(formatter={'float_kind':'{:f}'.format})
+    print('probabilities: {}'.format(probabilities.data.numpy()))
+
+    print('output data: ', output.data.numpy())
     index = output.data.numpy().argmax()
+
+    classes = [1, 2, 3, 4, 5]
+
+    word = 'are'
+    if classes[index] == 1:
+        word = 'is'
+
+    print('there {} {} mugs'.format(word, classes[index]))
+
+    if classes[index] != num_mugs:
+        print('WRONG, the actual number of mugs is {}!', num_mugs)
+    else:
+        print('this is correct')
 
     return index
 
 def main():
-    imagefile = "1_1000_color.png"     # 2
+    # imagefile = "1_1000_color.png"     # 2
+    # imagefile = "4_1038_color.png"
+    imagefile = "5_1259_color.png"
 
     imagepath = os.path.join(os.getcwd(), imagefile)
 
     print('imagepath: {}'.format(imagepath))
 
     # Run prediction function and obtain predicted class index
-    index = predict_image(imagepath)
+    index = predict_image(imagepath, num_mugs=int(imagefile[0]))
     print('index: {}'.format(index))
 
 if __name__ == "__main__":

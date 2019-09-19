@@ -84,10 +84,14 @@ class RgbAndLabelImageVisualizer(LeafSystem):
 
 
 def main():
-    np.random.seed(42)
-    random.seed(42)
+    # at 145, switched to 43
+    # at 290, switched to 44
+    # at 440, switched to 45
+    # at 583, switched to 46
+    np.random.seed(46)
+    random.seed(46)
     max_n_objects = 5
-    for scene_iter in range(870, 50000):
+    for scene_iter in range(583, 20000):
         try:
             builder = DiagramBuilder()
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
@@ -129,24 +133,17 @@ def main():
                     [np.random.uniform(-0.1, 0.1),
                      np.random.uniform(-0.1, 0.1),
                      np.random.uniform(0.1, 0.2)]])
-                
+
             # print(poses)
 
             mbp.AddForceElement(UniformGravityFieldElement())
             mbp.Finalize()
 
-            # visualizer = builder.AddSystem(MeshcatVisualizer(
-            #     scene_graph,
-            #     zmq_url="tcp://127.0.0.1:6000",
-            #     draw_period=0.001))
-            # builder.Connect(scene_graph.get_pose_bundle_output_port(),
-            #                 visualizer.get_input_port(0))
-
             # Add camera
             depth_camera_properties = DepthCameraProperties(
-                width=640, height=480, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
+                width=1000, height=1000, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
             parent_frame_id = scene_graph.world_frame_id()
-            camera_tf = RigidTransform(p=[0.0, 0.0, 0.7], rpy=RollPitchYaw([0, np.pi, 0]))
+            camera_tf = RigidTransform(p=[0.0, 0.0, 0.95], rpy=RollPitchYaw([0, np.pi, 0]))
             camera = builder.AddSystem(RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=True))
             camera.DeclarePeriodicPublish(0.1, 0.)
             builder.Connect(scene_graph.get_query_output_port(),
@@ -172,8 +169,6 @@ def main():
                 offset = k*7
                 q0[(offset):(offset+4)] = poses[k][0]
                 q0[(offset+4):(offset+7)] = poses[k][1]
-
-
 
             simulator = Simulator(diagram, diagram_context)
             simulator.set_target_realtime_rate(1.0)
@@ -201,9 +196,6 @@ def main():
             def vis_callback(x):
                 mbp.SetPositions(mbp_context, x)
                 pose_bundle = scene_graph.get_pose_bundle_output_port().Eval(sg_context)
-                # context = visualizer.CreateDefaultContext()
-                # context.FixInputPort(0, AbstractValue.Make(pose_bundle))
-                # visualizer.Publish(context)
 
             prog.AddVisualizationCallback(vis_callback, q_dec)
             prog.AddQuadraticErrorCost(np.eye(q0.shape[0])*1.0, q0, q_dec)
@@ -235,9 +227,40 @@ def main():
             # print('q0_final: ', q0_final)
 
             filename = 'images/classification/{}/{}_{}'.format(n_objects, n_objects, scene_iter)
+            time.sleep(0.5)
             rgb_and_label_image_visualizer.save_image(filename)
+
+            metadata_filename = filename + '_metadata.txt'
+            f = open(metadata_filename, "w+")
+
+            initial_poses = q0.flatten()
+            final_poses = q0_final.flatten()
+
+            def divide_chunks(l, n):     
+                # looping till length l 
+                for i in range(0, len(l), n):  
+                    yield l[i:i + n] 
+
+            n = 7
+            initial_poses = list(divide_chunks(initial_poses, n))
+            final_poses = list(divide_chunks(final_poses, n))
+
+            for pose in initial_poses:
+                for count, item in enumerate(pose): 
+                    f.write("%8.8f " % item)
+                f.write("\n")
+
+            f.write('\n----------\n')
+
+            for pose in final_poses:
+                for count, item in enumerate(pose): 
+                    f.write("%8.8f " % item)
+                f.write("\n")
+
+            f.close()
+
             print('DONE with iteration ' + str(scene_iter) + '!')
-            time.sleep(1.0)
+            time.sleep(5.0)
 
         except Exception as e:
             print("Unhandled exception ", e)
