@@ -74,7 +74,7 @@ class SimpleNet(nn.Module):
         output = self.fc(output)
         return output
 
-path = "mug_numeration_classifier.pth"
+path = "mug_numeration_54.model"
 checkpoint = torch.load(path, map_location=torch.device('cpu'))
 model = SimpleNet(num_classes=5)
 model.load_state_dict(checkpoint)
@@ -132,16 +132,16 @@ def predict_image(image_path, num_mugs):
     print('there {} {} mugs'.format(word, classes[index]))
 
     if classes[index] != num_mugs:
-        print('WRONG, the actual number of mugs is {}!', num_mugs)
+        print('WRONG, the actual number of mugs is {}!'.format(num_mugs))
     else:
         print('this is correct')
 
     return index
 
 def main():
-    # imagefile = "1_1000_color.png"     # 2
+    imagefile = "5_4_color.png"     # 2
     # imagefile = "4_1038_color.png"
-    imagefile = "5_1259_color.png"
+    # imagefile = "5_1259_color.png"
 
     imagepath = os.path.join(os.getcwd(), imagefile)
 

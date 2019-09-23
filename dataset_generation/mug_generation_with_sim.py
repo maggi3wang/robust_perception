@@ -45,8 +45,6 @@ from pydrake.systems.rendering import PoseBundle
 from pydrake.systems.sensors import RgbdSensor, Image, PixelType, PixelFormat
 from pydrake.geometry.render import DepthCameraProperties, MakeRenderEngineVtk, RenderEngineVtkParams
 
-import matplotlib.pyplot as plt
-
 
 class RgbAndLabelImageVisualizer(LeafSystem):
     def __init__(self,
@@ -84,14 +82,10 @@ class RgbAndLabelImageVisualizer(LeafSystem):
 
 
 def main():
-    # at 145, switched to 43
-    # at 290, switched to 44
-    # at 440, switched to 45
-    # at 583, switched to 46
     np.random.seed(46)
     random.seed(46)
     max_n_objects = 5
-    for scene_iter in range(583, 20000):
+    for scene_iter in range(0, 20000):
         try:
             builder = DiagramBuilder()
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
@@ -116,7 +110,7 @@ def main():
             parser = Parser(mbp, scene_graph)
 
             candidate_model_files = [
-                "/Users/maggiewang/Workspace/RobotLocomotion/robust_perception/dataset_generation/mug_clean/mug.urdf"
+                "mug_clean/mug.urdf"
             ]
 
             n_objects = (scene_iter % max_n_objects) + 1
@@ -134,9 +128,9 @@ def main():
                      np.random.uniform(-0.1, 0.1),
                      np.random.uniform(0.1, 0.2)]])
 
-            # print(poses)
+            print(poses)
 
-            mbp.AddForceElement(UniformGravityFieldElement())
+            # mbp.AddForceElement(UniformGravityFieldElement())
             mbp.Finalize()
 
             # Add camera
@@ -144,7 +138,7 @@ def main():
                 width=1000, height=1000, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
             parent_frame_id = scene_graph.world_frame_id()
             camera_tf = RigidTransform(p=[0.0, 0.0, 0.95], rpy=RollPitchYaw([0, np.pi, 0]))
-            camera = builder.AddSystem(RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=True))
+            camera = builder.AddSystem(RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=False))
             camera.DeclarePeriodicPublish(0.1, 0.)
             builder.Connect(scene_graph.get_query_output_port(),
                             camera.query_object_input_port())
@@ -226,7 +220,7 @@ def main():
             q0_final = mbp.GetPositions(mbp_context).copy()
             # print('q0_final: ', q0_final)
 
-            filename = 'images/classification/{}/{}_{}'.format(n_objects, n_objects, scene_iter)
+            filename = 'images/testing/{}/{}_{}'.format(n_objects, n_objects, scene_iter)
             time.sleep(0.5)
             rgb_and_label_image_visualizer.save_image(filename)
 
