@@ -129,7 +129,6 @@ def create_image(initial_poses, num_mugs):
 
         candidate_model_files = [
             os.path.join(package_directory, '../dataset_generation/mug_clean/mug.urdf')
-            # "mug_clean/mug.urdf"
         ]
 
         n_objects = num_mugs
@@ -141,7 +140,6 @@ def create_image(initial_poses, num_mugs):
             class_path = candidate_model_files[model_ind]
             classes.append(class_path)
             parser.AddModelFromFile(class_path, model_name=model_name)
-            # poses.append([np.array([0.6305034 ,  0.31697804, -0.68510477, -0.18061518]), [0,0,0]])
             poses.append(
                 [np.array([initial_poses[7*k + 0], initial_poses[7*k + 1],
                     initial_poses[7*k + 2], initial_poses[7*k + 3]]),
