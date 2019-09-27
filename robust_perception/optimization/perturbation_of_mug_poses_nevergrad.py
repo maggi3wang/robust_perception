@@ -55,15 +55,11 @@ from io import open, BytesIO
 from PIL import Image, ImageFile
 import json
 
-import rbfopt
+import nevergrad as ng
 
 from ..image_classification.simple_net import SimpleNet
 
 package_directory = os.path.dirname(os.path.abspath(__file__))
-
-all_poses = []
-all_probabilities = []
-iteration_num = 0
 
 class RgbAndLabelImageVisualizer(LeafSystem):
     def __init__(self, draw_timestep=0.00001):
@@ -247,8 +243,7 @@ def create_image(initial_poses, num_mugs):
         q0_final = mbp.GetPositions(mbp_context).copy()
         print('q0_final: ', q0_final)
 
-        global iteration_num
-        filename = 'robust_perception/optimization/{}_{}'.format(iteration_num, n_objects)
+        filename = 'robust_perception/optimization/{}'.format(n_objects)
         time.sleep(0.5)
         rgb_and_label_image_visualizer.save_image(filename)
 
@@ -352,9 +347,6 @@ def predict_image(model, image_path, num_mugs):
     return probabilities.data.numpy()[0]
 
 def run_inference(poses):
-    global all_poses
-    global all_probabilities
-
     path = os.path.join(package_directory, '../image_classification/mug_numeration_classifier.model')
     checkpoint = torch.load(path, map_location=torch.device('cpu'))
     model = SimpleNet(num_classes=5)
@@ -362,28 +354,15 @@ def run_inference(poses):
     model.eval()
 
     print('POSES:', poses)
-    all_poses.append(poses)
-
-    # to change for more than one mug
-    pose_is_feasible = False
-    for i, pose in enumerate(poses):
-        if pose != 0.0 and i < 4:
-            pose_is_feasible = True
-
-    if not pose_is_feasible:
-        return 1.1        # high prob
-
-    imagefile = create_image(initial_poses=poses, num_mugs=1)
-    global iteration_num
-    imagepath = os.path.join(package_directory, '{}_1_color.png'.format(iteration_num))
-    iteration_num += 1
+    print(poses[0])
+    imagefile = create_image(initial_poses=poses[0], num_mugs=1)
+    imagepath = os.path.join(package_directory, '1_color.png')
 
     # Run prediction function and obtain predicted class index
     probabilities = predict_image(model, imagepath, num_mugs=1)
     # return probabilities
     highest_prob = max(probabilities)
     print('highest_prob:', highest_prob)
-    all_probabilities.append(highest_prob)
     return highest_prob
 
 def main():
@@ -399,28 +378,11 @@ def main():
 
     # Read initial pose off of the text file # TODO!!!
     # dimension depends on how many mugs we want
-    bb = rbfopt.RbfoptUserBlackBox(7, np.array([-0.15] * 7), np.array([0.15] * 7),
-        np.array(['R'] * 7), run_inference)
-    settings = rbfopt.RbfoptSettings(max_evaluations=30)
-    alg = rbfopt.RbfoptAlgorithm(settings, bb)
-    objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
-    alg.save_to_file('state.dat')
-
-    global all_poses
-    global all_probabilities
-
-    print('all poses:', all_poses)
-    print('all probabilities', all_probabilities)
-
-    plt.figure().clear()
-    plt.close()
-
-    plt.figure(2)
-    plt.plot(all_probabilities)
-    axes = plt.gca()
-    axes.set_xlim([0, 31])
-    axes.set_ylim([97, 101])
-    plt.show()
+    initial_poses = ng.var.Array(1, 7).bounded(-0.5, 0.5)
+    instrum = ng.Instrumentation(poses=initial_poses)
+    optimizer = ng.optimizers.RandomSearch(instrumentation=instrum, budget=100)
+    probability = optimizer.minimize(run_inference)
+    print(probability)
 
 if __name__ == "__main__":
     main()
