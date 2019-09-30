@@ -64,6 +64,7 @@ package_directory = os.path.dirname(os.path.abspath(__file__))
 all_poses = []
 all_probabilities = []
 iteration_num = 0
+pose_bundle = None
 
 class RgbAndLabelImageVisualizer(LeafSystem):
     def __init__(self, draw_timestep=0.00001):
@@ -159,6 +160,13 @@ def create_image(initial_poses, num_mugs):
         # mbp.AddForceElement(UniformGravityFieldElement())
         mbp.Finalize()
 
+        visualizer = builder.AddSystem(MeshcatVisualizer(
+            scene_graph,
+            zmq_url="tcp://127.0.0.1:6000",
+            draw_period=0.001))
+        builder.Connect(scene_graph.get_pose_bundle_output_port(),
+                visualizer.get_input_port(0))
+
         # Add camera
         depth_camera_properties = DepthCameraProperties(
             width=1000, height=1000, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
@@ -192,7 +200,7 @@ def create_image(initial_poses, num_mugs):
             q0[(offset+4):(offset+7)] = poses[k][1]
 
         simulator = Simulator(diagram, diagram_context)
-        simulator.set_target_realtime_rate(1.0)
+        # simulator.set_target_realtime_rate(1.0)
         simulator.set_publish_every_time_step(False)
         simulator.Initialize()
 
@@ -216,6 +224,7 @@ def create_image(initial_poses, num_mugs):
 
         def vis_callback(x):
             mbp.SetPositions(mbp_context, x)
+            global pose_bundle
             pose_bundle = scene_graph.get_pose_bundle_output_port().Eval(sg_context)
 
         prog.AddVisualizationCallback(vis_callback, q_dec)
@@ -243,13 +252,28 @@ def create_image(initial_poses, num_mugs):
         mbp.SetPositions(mbp_context, q0_proj)
         q0_initial = q0_proj.copy()
         # print('q0_initial: ', q0_initial)
-        simulator.AdvanceTo(10.0)
+        # simulator.AdvanceTo(10.0)
+        converged = False
+        t = 0.5
+
+        while not converged:
+            t += 0.1
+            simulator.AdvanceTo(t)
+
+            velocities = mbp.GetVelocities(mbp_context)
+            # print(velocities)
+            # print('t: {:10.4f}, norm: {:10.4f}, x: {:10.4f}, y: {:10.4f}, z: {:10.4f}'.format(
+            #     t, np.linalg.norm(velocities), velocities[0], velocities[1], velocities[2]))
+
+            if np.linalg.norm(velocities) < 0.05:
+                converged = True
+
         q0_final = mbp.GetPositions(mbp_context).copy()
         # print('q0_final: ', q0_final)
 
         global iteration_num
-        filename = 'robust_perception/optimization/data1/{}_{}'.format(iteration_num, n_objects)
-        time.sleep(0.5)
+        filename = 'robust_perception/optimization/data2/{}_{}'.format(iteration_num, n_objects)
+        # time.sleep(0.5)
         rgb_and_label_image_visualizer.save_image(filename)
 
         metadata_filename = filename + '_metadata.txt'
@@ -282,7 +306,7 @@ def create_image(initial_poses, num_mugs):
         f.close()
 
         # print('DONE with iteration!')
-        time.sleep(5.0)
+        # time.sleep(5.0)
 
     except Exception as e:
         print("Unhandled exception ", e)
@@ -376,7 +400,7 @@ def run_inference(poses):
 
     imagefile = create_image(initial_poses=poses, num_mugs=1)
     global iteration_num
-    imagepath = os.path.join(package_directory, 'data1/{}_1_color.png'.format(iteration_num))
+    imagepath = os.path.join(package_directory, 'data2/{}_1_color.png'.format(iteration_num))
     iteration_num += 1
 
     # Run prediction function and obtain predicted class index

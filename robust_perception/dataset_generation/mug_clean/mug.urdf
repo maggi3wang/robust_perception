@@ -1,7 +1,7 @@
 <robot name="mug">
   <link name="mug_body_link">
     <inertial>
-      <origin xyz="2.33E-03 2.35E-07 -8.62E-03" rpy="0 0 0"/>
+      <origin xyz="1.0E-02 2.35E-07 -8.62E-03" rpy="0 0 0"/>
       <mass value="3.65E-01"/>
       <inertia ixx="6.5445E-04" ixy="6.5133E-08" ixz="7.3334E-06" iyy="7.1553E-04" iyz="1.2278E-09" izz="6.7820E-04"/>
     </inertial>
