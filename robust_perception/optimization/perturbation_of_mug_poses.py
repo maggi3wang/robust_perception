@@ -70,19 +70,19 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         LeafSystem.__init__(self)
         self.set_name('image viz')
         self.timestep = draw_timestep
-        self._DeclarePeriodicPublish(draw_timestep, 0.0)
+        self.DeclarePeriodicPublish(draw_timestep, 0.0)
         
         self.rgb_image_input_port = \
-            self._DeclareAbstractInputPort("rgb_image_input_port",
-                                   AbstractValue.Make(PydrakeImage[PixelType.kRgba8U](640, 480, 3)))
+            self.DeclareAbstractInputPort("rgb_image_input_port",
+                AbstractValue.Make(PydrakeImage[PixelType.kRgba8U](640, 480, 3)))
         self.label_image_input_port = \
-            self._DeclareAbstractInputPort("label_image_input_port",
-                                   AbstractValue.Make(PydrakeImage[PixelType.kLabel16I](640, 480, 1)))
+            self.DeclareAbstractInputPort("label_image_input_port",
+                AbstractValue.Make(PydrakeImage[PixelType.kLabel16I](640, 480, 1)))
 
         self.color_image = None
         self.label_image = None
 
-    def _DoPublish(self, context, event):
+    def DoPublish(self, context, event):
         self.color_image = self.EvalAbstractInput(context, 0).get_value()
         self.label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
 
@@ -154,7 +154,7 @@ def create_image(initial_poses, num_mugs):
             #      np.random.uniform(-0.1, 0.1),
             #      np.random.uniform(0.1, 0.2)]])
 
-        print(poses)
+        # print(poses)
 
         # mbp.AddForceElement(UniformGravityFieldElement())
         mbp.Finalize()
@@ -234,21 +234,21 @@ def create_image(initial_poses, num_mugs):
         prog.SetSolverOption(sid, "Scale option", 0)
 
         # print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
-        print(type(prog))
+        # print(type(prog))
         result = mp.Solve(prog)
         # print("Solve info: ", result)
         # print("Solved in %f seconds" % (time.time() - start_time))
-        print(result.get_solver_id().name())
+        # print(result.get_solver_id().name())
         q0_proj = result.GetSolution(q_dec)
         mbp.SetPositions(mbp_context, q0_proj)
         q0_initial = q0_proj.copy()
-        print('q0_initial: ', q0_initial)
-        simulator.StepTo(10.0)
+        # print('q0_initial: ', q0_initial)
+        simulator.AdvanceTo(10.0)
         q0_final = mbp.GetPositions(mbp_context).copy()
-        print('q0_final: ', q0_final)
+        # print('q0_final: ', q0_final)
 
         global iteration_num
-        filename = 'robust_perception/optimization/{}_{}'.format(iteration_num, n_objects)
+        filename = 'robust_perception/optimization/data1/{}_{}'.format(iteration_num, n_objects)
         time.sleep(0.5)
         rgb_and_label_image_visualizer.save_image(filename)
 
@@ -281,7 +281,7 @@ def create_image(initial_poses, num_mugs):
 
         f.close()
 
-        print('DONE with iteration!')
+        # print('DONE with iteration!')
         time.sleep(5.0)
 
     except Exception as e:
@@ -293,7 +293,7 @@ def create_image(initial_poses, num_mugs):
     return filename
 
 def predict_image(model, image_path, num_mugs):
-    print('in predict_image image_path: {}'.format(image_path))
+    # print('in predict_image image_path: {}'.format(image_path))
 
     image = Image.open(image_path)
     image = image.convert('RGB')
@@ -310,7 +310,7 @@ def predict_image(model, image_path, num_mugs):
 
     # Preprocess the image
     image_tensor = transformation(image).float()
-    print('image_tensor: ', image_tensor)
+    # print('image_tensor: ', image_tensor)
 
     # Add an extra batch dimension since pytorch treats all images as batches
     image_tensor = image_tensor.unsqueeze_(0)
@@ -329,9 +329,9 @@ def predict_image(model, image_path, num_mugs):
     probabilities = sm(output)
 
     np.set_printoptions(formatter={'float_kind':'{:f}'.format})
-    print('probabilities: {}'.format(probabilities.data.numpy()))
+    # print('probabilities: {}'.format(probabilities.data.numpy()))
 
-    print('output data: ', output.data.numpy())
+    # print('output data: ', output.data.numpy())
     index = output.data.numpy().argmax()
 
     classes = [1, 2, 3, 4, 5]
@@ -342,12 +342,12 @@ def predict_image(model, image_path, num_mugs):
         word = 'is'
         s = ''
 
-    print('there {} {} mug{}'.format(word, classes[index], s))
+    # print('there {} {} mug{}'.format(word, classes[index], s))
 
     if classes[index] != num_mugs:
         print('WRONG, the actual number of mugs is {}!'.format(num_mugs))
-    else:
-        print('this is correct')
+    # else:
+    #     print('this is correct')
 
     return probabilities.data.numpy()[0]
 
@@ -361,7 +361,7 @@ def run_inference(poses):
     model.load_state_dict(checkpoint)
     model.eval()
 
-    print('POSES:', poses)
+    # print('POSES:', poses)
     all_poses.append(poses)
 
     # to change for more than one mug
@@ -371,18 +371,19 @@ def run_inference(poses):
             pose_is_feasible = True
 
     if not pose_is_feasible:
-        return 1.1        # high prob
+        all_probabilities.append(np.nan)
+        return 1.01
 
     imagefile = create_image(initial_poses=poses, num_mugs=1)
     global iteration_num
-    imagepath = os.path.join(package_directory, '{}_1_color.png'.format(iteration_num))
+    imagepath = os.path.join(package_directory, 'data1/{}_1_color.png'.format(iteration_num))
     iteration_num += 1
 
     # Run prediction function and obtain predicted class index
     probabilities = predict_image(model, imagepath, num_mugs=1)
     # return probabilities
     highest_prob = max(probabilities)
-    print('highest_prob:', highest_prob)
+    # print('highest_prob:', highest_prob)
     all_probabilities.append(highest_prob)
     return highest_prob
 
@@ -399,12 +400,15 @@ def main():
 
     # Read initial pose off of the text file # TODO!!!
     # dimension depends on how many mugs we want
-    bb = rbfopt.RbfoptUserBlackBox(7, np.array([-0.15] * 7), np.array([0.15] * 7),
+    bb = rbfopt.RbfoptUserBlackBox(
+        7, [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1], [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2],
         np.array(['R'] * 7), run_inference)
-    settings = rbfopt.RbfoptSettings(max_evaluations=30)
+    settings = rbfopt.RbfoptSettings(max_evaluations=300)
     alg = rbfopt.RbfoptAlgorithm(settings, bb)
     objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
-    alg.save_to_file('state.dat')
+    state_path = os.path.join(package_directory, 'state.dat')
+    # print(state_path)
+    alg.save_to_file(state_path)
 
     global all_poses
     global all_probabilities
@@ -412,14 +416,13 @@ def main():
     print('all poses:', all_poses)
     print('all probabilities', all_probabilities)
 
-    plt.figure().clear()
-    plt.close()
-
-    plt.figure(2)
-    plt.plot(all_probabilities)
-    axes = plt.gca()
-    axes.set_xlim([0, 31])
-    axes.set_ylim([97, 101])
+    fig2, ax = plt.subplots()
+    ax.plot(all_probabilities)
+    ax.set(xlabel='Iteration', ylabel='Probability')
+    ax.set_xlim(xmin=0, xmax=31)
+    ax.set_ylim(ymin=0.95, ymax=1.0)
+    ax.grid()
+    fig2.savefig(os.path.join(package_directory, 'probability_plot.png'))
     plt.show()
 
 if __name__ == "__main__":
