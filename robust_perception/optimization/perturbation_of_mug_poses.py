@@ -58,13 +58,17 @@ import json
 import rbfopt
 
 from ..image_classification.simple_net import SimpleNet
+from scipy import optimize
 
 package_directory = os.path.dirname(os.path.abspath(__file__))
+
+NUM_MUGS = 3
 
 all_poses = []
 all_probabilities = []
 iteration_num = 0
 pose_bundle = None
+folder_name = 'data_scipy_powell'
 
 class RgbAndLabelImageVisualizer(LeafSystem):
     def __init__(self, draw_timestep=0.00001):
@@ -100,6 +104,13 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         label_fig.axes.get_yaxis().set_visible(False)
         plt.savefig(filename + '_label.png', bbox_inches='tight', pad_inches=0)
 
+# Disable
+def blockPrint():
+    sys.stdout = open(os.devnull, 'w')
+
+# Restore
+def enablePrint():
+    sys.stdout = sys.__stdout__
 
 def create_image(initial_poses, num_mugs):    
     np.random.seed(46)
@@ -155,17 +166,17 @@ def create_image(initial_poses, num_mugs):
             #      np.random.uniform(-0.1, 0.1),
             #      np.random.uniform(0.1, 0.2)]])
 
-        # print(poses)
-
         # mbp.AddForceElement(UniformGravityFieldElement())
         mbp.Finalize()
 
+        blockPrint()
         visualizer = builder.AddSystem(MeshcatVisualizer(
             scene_graph,
             zmq_url="tcp://127.0.0.1:6000",
             draw_period=0.001))
         builder.Connect(scene_graph.get_pose_bundle_output_port(),
                 visualizer.get_input_port(0))
+        enablePrint()
 
         # Add camera
         depth_camera_properties = DepthCameraProperties(
@@ -271,8 +282,9 @@ def create_image(initial_poses, num_mugs):
         q0_final = mbp.GetPositions(mbp_context).copy()
         # print('q0_final: ', q0_final)
 
+        global folder_name
         global iteration_num
-        filename = 'robust_perception/optimization/data2/{}_{}'.format(iteration_num, n_objects)
+        filename = 'robust_perception/optimization/{}/{:04d}_{}'.format(folder_name, iteration_num, n_objects)
         # time.sleep(0.5)
         rgb_and_label_image_visualizer.save_image(filename)
 
@@ -305,7 +317,7 @@ def create_image(initial_poses, num_mugs):
 
         f.close()
 
-        # print('DONE with iteration!')
+        # print('DONE with iteration {}!'.format(iteration_num))
         # time.sleep(5.0)
 
     except Exception as e:
@@ -378,6 +390,7 @@ def predict_image(model, image_path, num_mugs):
 def run_inference(poses):
     global all_poses
     global all_probabilities
+    global NUM_MUGS
 
     path = os.path.join(package_directory, '../image_classification/mug_numeration_classifier.model')
     checkpoint = torch.load(path, map_location=torch.device('cpu'))
@@ -398,16 +411,21 @@ def run_inference(poses):
         all_probabilities.append(np.nan)
         return 1.01
 
-    imagefile = create_image(initial_poses=poses, num_mugs=1)
+    imagefile = create_image(initial_poses=poses, num_mugs=NUM_MUGS)
+    global folder_name
     global iteration_num
-    imagepath = os.path.join(package_directory, 'data2/{}_1_color.png'.format(iteration_num))
-    iteration_num += 1
+    imagepath = os.path.join(
+        package_directory, 
+        '{}/{:04d}_{}_color.png'.format(folder_name, iteration_num, NUM_MUGS))
 
     # Run prediction function and obtain predicted class index
-    probabilities = predict_image(model, imagepath, num_mugs=1)
+    probabilities = predict_image(model, imagepath, num_mugs=NUM_MUGS)
     # return probabilities
     highest_prob = max(probabilities)
-    # print('highest_prob:', highest_prob)
+    print('iteration: {}, probabilities: {}, highest_prob: {}'.format(
+        iteration_num, probabilities, highest_prob))
+    print('      {}'.format(poses))
+    iteration_num += 1
     all_probabilities.append(highest_prob)
     return highest_prob
 
@@ -424,15 +442,36 @@ def main():
 
     # Read initial pose off of the text file # TODO!!!
     # dimension depends on how many mugs we want
-    bb = rbfopt.RbfoptUserBlackBox(
-        7, [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1], [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2],
-        np.array(['R'] * 7), run_inference)
-    settings = rbfopt.RbfoptSettings(max_evaluations=300)
-    alg = rbfopt.RbfoptAlgorithm(settings, bb)
-    objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
-    state_path = os.path.join(package_directory, 'state.dat')
+    # bb = rbfopt.RbfoptUserBlackBox(
+    #     7, [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1], [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2],
+    #     np.array(['R'] * 7), run_inference)
+    # settings = rbfopt.RbfoptSettings(max_evaluations=300)
+    # alg = rbfopt.RbfoptAlgorithm(settings, bb)
+
+    mug_initial = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
+    mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
+    # mug_bounds = ((-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1), (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2))
+    
+    mug_initials = []
+    mug_lower_bounds = []
+    mug_upper_bounds = []
+    for i in range(0, 3):
+        mug_initials += mug_initial
+        mug_lower_bounds += mug_lower_bound
+        mug_upper_bounds += mug_upper_bound
+
+    print(mug_initials)
+    print(mug_lower_bounds)
+    print(mug_upper_bounds)
+
+    optimize.minimize(run_inference, mug_initials, bounds=(mug_lower_bounds, mug_upper_bounds),
+        method='Powell', options={'maxiter':1000, 'disp': True}) # Powell, "Nelder-Mead") method='BFGS')
+
+    # objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
+    # state_path = os.path.join(package_directory, 'state.dat')
     # print(state_path)
-    alg.save_to_file(state_path)
+    # alg.save_to_file(state_path)
 
     global all_poses
     global all_probabilities
