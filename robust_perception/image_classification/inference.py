@@ -79,7 +79,9 @@ def main():
     model.eval()
     print(model)
 
-    imagefile = "1_0_color.png"     # 2
+    # imagefile = "3_62_color.png"
+    imagefile = "0082_3_color.png"
+    # imagefile = "1_0_color.png"     # 2
     # imagefile = "4_1038_color.png"
     # imagefile = "5_1259_color.png"
 
