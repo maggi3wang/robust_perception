@@ -200,14 +200,14 @@ class MugPipeline():
             mbp.Finalize()
 
             # Add meshcat visualizer
-            blockPrint()
-            visualizer = builder.AddSystem(MeshcatVisualizer(
-                scene_graph,
-                zmq_url="tcp://127.0.0.1:6000",
-                draw_period=0.0001))
-            builder.Connect(scene_graph.get_pose_bundle_output_port(),
-                    visualizer.get_input_port(0))
-            enablePrint()
+            # blockPrint()
+            # visualizer = builder.AddSystem(MeshcatVisualizer(
+            #     scene_graph,
+            #     zmq_url="tcp://127.0.0.1:6000",
+            #     draw_period=0.0001))
+            # builder.Connect(scene_graph.get_pose_bundle_output_port(),
+            #         visualizer.get_input_port(0))
+            # enablePrint()
 
             # Add camera
             depth_camera_properties = DepthCameraProperties(
@@ -498,6 +498,9 @@ class Optimizer():
 
         self.num_vars = 7 * self.num_mugs
 
+        # TODO make this global
+        self.package_directory = os.path.dirname(os.path.abspath(__file__))
+
     @staticmethod
     def run_inference(poses):
         """
@@ -511,14 +514,15 @@ class Optimizer():
     #     else:
     #         raise Exception('optimizer type not defined')
 
-    def plot_graphs():
+    def plot_graphs(self):
         fig2, ax = plt.subplots()
+        all_probabilities = self.mug_pipeline.get_all_probabilities()
         ax.plot(all_probabilities)
         ax.set(xlabel='Iteration', ylabel='Probability')
-        ax.set_xlim(xmin=0, xmax=31)
-        ax.set_ylim(ymin=0.95, ymax=1.0)
+        ax.set_xlim(xmin=0, xmax=len(all_probabilities))
+        ax.set_ylim(ymin=min(all_probabilities), ymax=1.0)
         ax.grid()
-        fig2.savefig(os.path.join(package_directory, 'probability_plot.png'))
+        fig2.savefig(os.path.join(self.package_directory, 'probability_plot.png'))
         plt.show()
 
     # def run_nevergrad():
@@ -547,11 +551,12 @@ class Optimizer():
         settings = rbfopt.RbfoptSettings(max_evaluations=self.max_evaluations)
         alg = rbfopt.RbfoptAlgorithm(settings, bb)
         objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
-        state_path = os.path.join(package_directory, 'state.dat')
+        state_path = os.path.join(self.package_directory, 'state.dat')
         # print(state_path)
         alg.save_to_file(state_path)
 
-        return all_poses, all_probabilities
+        print('all_poses: {}, all_probabilities: {}'.format(
+            self.mug_pipeline.get_all_poses(), self.mug_pipeline.get_all_probabilities()))
 
     # def run_pycma(self):
     #     """
@@ -634,6 +639,7 @@ def main():
     # optimizer.plot_graphs(optimizer.run_nevergrad())
 
     optimizer.run_rbfopt()
+    optimizer.plot_graphs()
     # optimizer.run_pycma()
     # optimizer.run_scipy_fmin_slsqp()
 
