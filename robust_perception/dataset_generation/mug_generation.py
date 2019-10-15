@@ -42,32 +42,38 @@ from pydrake.systems.analysis import Simulator
 from pydrake.systems.framework import AbstractValue, DiagramBuilder, LeafSystem, PortDataType
 from pydrake.systems.meshcat_visualizer import MeshcatVisualizer
 from pydrake.systems.rendering import PoseBundle
-from pydrake.systems.sensors import RgbdSensor, Image, PixelType, PixelFormat
+from pydrake.systems.sensors import RgbdSensor, Image as PydrakeImage, PixelType, PixelFormat
 from pydrake.geometry.render import DepthCameraProperties, MakeRenderEngineVtk, RenderEngineVtkParams
 
 
 class RgbAndLabelImageVisualizer(LeafSystem):
-    def __init__(self,
-                 draw_timestep=0.033333):
+    def __init__(self, draw_timestep=0.033333):
         LeafSystem.__init__(self)
         self.set_name('image viz')
         self.timestep = draw_timestep
-        self._DeclarePeriodicPublish(draw_timestep, 0.0)
+        self.DeclarePeriodicPublish(draw_timestep, 0.0)
         
         self.rgb_image_input_port = \
-            self._DeclareAbstractInputPort("rgb_image_input_port",
-                                   AbstractValue.Make(Image[PixelType.kRgba8U](640, 480, 3)))
+            self.DeclareAbstractInputPort("rgb_image_input_port",
+                AbstractValue.Make(PydrakeImage[PixelType.kRgba8U](640, 480, 3)))
         self.label_image_input_port = \
-            self._DeclareAbstractInputPort("label_image_input_port",
-                                   AbstractValue.Make(Image[PixelType.kLabel16I](640, 480, 1)))
+            self.DeclareAbstractInputPort("label_image_input_port",
+                AbstractValue.Make(PydrakeImage[PixelType.kLabel16I](640, 480, 1)))
+
         self.color_image = None
         self.label_image = None
 
-    def _DoPublish(self, context, event):
+    def DoPublish(self, context, event):
+        """
+        Update color_image and label_image for saving
+        """
         self.color_image = self.EvalAbstractInput(context, 0).get_value()
         self.label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
 
     def save_image(self, filename):
+        """
+        Save images to a file
+        """
         color_fig = plt.imshow(self.color_image.data)
         plt.axis('off')
         color_fig.axes.get_xaxis().set_visible(False)
@@ -91,15 +97,17 @@ def main():
         try:
             builder = DiagramBuilder()
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
-                builder, MultibodyPlant(time_step=0.001))
+                builder, MultibodyPlant(time_step=0.0001))
             renderer_params = RenderEngineVtkParams()
             scene_graph.AddRenderer("renderer", MakeRenderEngineVtk(renderer_params))
+
             # Add ground
             world_body = mbp.world_body()
             ground_shape = Box(2., 2., 2.)
             ground_body = mbp.AddRigidBody("ground", SpatialInertia(
                 mass=10.0, p_PScm_E=np.array([0., 0., 0.]),
                 G_SP_E=UnitInertia(1.0, 1.0, 1.0)))
+            
             mbp.WeldFrames(world_body.body_frame(), ground_body.body_frame(),
                            RigidTransform(Isometry3(rotation=np.eye(3), translation=[0, 0, -1])))
             mbp.RegisterVisualGeometry(
@@ -130,17 +138,27 @@ def main():
                      np.random.uniform(-0.1, 0.1),
                      np.random.uniform(0.1, 0.2)]])
 
+            mbp.Finalize()
+
             print(poses)
 
-            # mbp.AddForceElement(UniformGravityFieldElement())
-            mbp.Finalize()
+            # Add meshcat visualizer
+            # blockPrint()
+            # visualizer = builder.AddSystem(MeshcatVisualizer(
+            #     scene_graph,
+            #     zmq_url="tcp://127.0.0.1:6000",
+            #     draw_period=0.001))
+            # builder.Connect(scene_graph.get_pose_bundle_output_port(),
+            #         visualizer.get_input_port(0))
+            # enablePrint()
 
             # Add camera
             depth_camera_properties = DepthCameraProperties(
                 width=1000, height=1000, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
             parent_frame_id = scene_graph.world_frame_id()
             camera_tf = RigidTransform(p=[0.0, 0.0, 0.95], rpy=RollPitchYaw([0, np.pi, 0]))
-            camera = builder.AddSystem(RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=False))
+            camera = builder.AddSystem(
+                RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=False))
             camera.DeclarePeriodicPublish(0.1, 0.)
             builder.Connect(scene_graph.get_query_output_port(),
                             camera.query_object_input_port())
@@ -166,8 +184,10 @@ def main():
                 q0[(offset):(offset+4)] = poses[k][0]
                 q0[(offset+4):(offset+7)] = poses[k][1]
 
+            initial_poses = q0.flatten()
+
             simulator = Simulator(diagram, diagram_context)
-            simulator.set_target_realtime_rate(1.0)
+            # simulator.set_target_realtime_rate(1.0)
             simulator.set_publish_every_time_step(False)
             simulator.Initialize()
 
@@ -177,6 +197,7 @@ def main():
 
             def squaredNorm(x):
                 return np.array([x[0] ** 2 + x[1] ** 2 + x[2] ** 2 + x[3] ** 2])
+
             for k in range(len(poses)):
                 # Quaternion norm
                 prog.AddConstraint(
@@ -191,6 +212,7 @@ def main():
 
             def vis_callback(x):
                 mbp.SetPositions(mbp_context, x)
+                global pose_bundle
                 pose_bundle = scene_graph.get_pose_bundle_output_port().Eval(sg_context)
 
             prog.AddVisualizationCallback(vis_callback, q_dec)
@@ -209,27 +231,43 @@ def main():
             prog.SetSolverOption(sid, "Scale option", 0)
 
             # print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
-            print(type(prog))
+            # print(type(prog))
             result = mp.Solve(prog)
             # print("Solve info: ", result)
             # print("Solved in %f seconds" % (time.time() - start_time))
-            print(result.get_solver_id().name())
+            # print(result.get_solver_id().name())
             q0_proj = result.GetSolution(q_dec)
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
             # print('q0_initial: ', q0_initial)
-            simulator.StepTo(10.0)
+
+            converged = False
+            t = 0.1
+
+            while not converged:
+                simulator.AdvanceTo(t)
+                t += 0.0001
+                
+                velocities = mbp.GetVelocities(mbp_context)
+                # print(velocities)
+                # print('t: {:10.4f}, norm: {:10.4f}, x: {:10.4f}, y: {:10.4f}, z: {:10.4f}'.format(
+                #     t, np.linalg.norm(velocities), velocities[0], velocities[1], velocities[2]))
+
+                if np.linalg.norm(velocities) < 0.05:
+                    converged = True
+
             q0_final = mbp.GetPositions(mbp_context).copy()
             # print('q0_final: ', q0_final)
 
-            filename = 'images/testing/{}/{}_{}'.format(n_objects, n_objects, scene_iter)
-            time.sleep(0.5)
+            filename = 'robust_perception/dataset_generation/images/classification/{}/{}_{:04d}'.format(
+                n_objects, n_objects, scene_iter)
+            # time.sleep(0.5)
             rgb_and_label_image_visualizer.save_image(filename)
 
             metadata_filename = filename + '_metadata.txt'
             f = open(metadata_filename, "w+")
 
-            initial_poses = q0.flatten()
+            after_solver_poses = q0_initial.flatten()
             final_poses = q0_final.flatten()
 
             def divide_chunks(l, n):     
@@ -238,10 +276,21 @@ def main():
                     yield l[i:i + n] 
 
             n = 7
+
             initial_poses = list(divide_chunks(initial_poses, n))
+            print('initial', initial_poses)
+            after_solver_poses = list(divide_chunks(after_solver_poses, n))
+            print('after', after_solver_poses)
             final_poses = list(divide_chunks(final_poses, n))
 
             for pose in initial_poses:
+                for count, item in enumerate(pose):
+                    f.write("%8.8f " % item)
+                f.write("\n")
+
+            f.write('\n----------\n')
+
+            for pose in after_solver_poses:
                 for count, item in enumerate(pose): 
                     f.write("%8.8f " % item)
                 f.write("\n")
@@ -256,7 +305,7 @@ def main():
             f.close()
 
             print('DONE with iteration ' + str(scene_iter) + '!')
-            time.sleep(5.0)
+            # time.sleep(5.0)
 
         except Exception as e:
             print("Unhandled exception ", e)
