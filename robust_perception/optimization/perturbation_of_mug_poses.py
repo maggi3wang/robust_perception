@@ -68,7 +68,7 @@ from ..image_classification.simple_net import SimpleNet
 
 
 class RgbAndLabelImageVisualizer(LeafSystem):
-    def __init__(self, draw_timestep=0.00001):
+    def __init__(self, draw_timestep=0.033333):
         LeafSystem.__init__(self)
         self.set_name('image viz')
         self.timestep = draw_timestep
@@ -133,6 +133,8 @@ class MugPipeline():
         self.pose_bundle = None
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
 
+        self.metadata_filename = None
+
     def get_all_poses(self):
         return self.all_poses
 
@@ -153,7 +155,7 @@ class MugPipeline():
         try:
             builder = DiagramBuilder()
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
-                builder, MultibodyPlant(time_step=0.001))
+                builder, MultibodyPlant(time_step=0.0001))
             renderer_params = RenderEngineVtkParams()
             scene_graph.AddRenderer("renderer", MakeRenderEngineVtk(renderer_params))
 
@@ -199,12 +201,14 @@ class MugPipeline():
 
             mbp.Finalize()
 
+            print(poses)
+
             # Add meshcat visualizer
             # blockPrint()
             # visualizer = builder.AddSystem(MeshcatVisualizer(
             #     scene_graph,
             #     zmq_url="tcp://127.0.0.1:6000",
-            #     draw_period=0.0001))
+            #     draw_period=0.001))
             # builder.Connect(scene_graph.get_pose_bundle_output_port(),
             #         visualizer.get_input_port(0))
             # enablePrint()
@@ -220,7 +224,7 @@ class MugPipeline():
             builder.Connect(scene_graph.get_query_output_port(),
                             camera.query_object_input_port())
 
-            rgb_and_label_image_visualizer = RgbAndLabelImageVisualizer(draw_timestep=0.0001)
+            rgb_and_label_image_visualizer = RgbAndLabelImageVisualizer(draw_timestep=0.1)
             camera_viz = builder.AddSystem(rgb_and_label_image_visualizer)
             builder.Connect(camera.color_image_output_port(),
                             camera_viz.get_input_port(0))
@@ -295,13 +299,13 @@ class MugPipeline():
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
             # print('q0_initial: ', q0_initial)
-            # simulator.AdvanceTo(10.0)
+
             converged = False
-            t = 0.0
+            t = 0.1
 
             while not converged:
-                t += 0.001
                 simulator.AdvanceTo(t)
+                t += 0.0001
                 
                 velocities = mbp.GetVelocities(mbp_context)
                 # print(velocities)
@@ -322,10 +326,10 @@ class MugPipeline():
             # time.sleep(0.5)
             rgb_and_label_image_visualizer.save_image(filename)
 
-            metadata_filename = filename + '_metadata.txt'
-            f = open(metadata_filename, "w+")
+            self.metadata_filename = filename + '_metadata.txt'
+            f = open(self.metadata_filename, "w+")
 
-            self.initial_poses = q0.flatten()
+            self.after_solver_poses = q0.flatten()
             self.final_poses = q0_final.flatten()
 
             def divide_chunks(l, n):     
@@ -334,10 +338,19 @@ class MugPipeline():
                     yield l[i:i + n] 
 
             n = 7
+
             self.initial_poses = list(divide_chunks(self.initial_poses, n))
+            self.after_solver_poses = list(divide_chunks(self.after_solver_poses, n))
             self.final_poses = list(divide_chunks(self.final_poses, n))
 
             for pose in self.initial_poses:
+                for count, item in enumerate(pose): 
+                    f.write("%8.8f " % item)
+                f.write("\n")
+
+            f.write('\n----------\n')
+
+            for pose in self.after_solver_poses:
                 for count, item in enumerate(pose): 
                     f.write("%8.8f " % item)
                 f.write("\n")
@@ -374,11 +387,11 @@ class MugPipeline():
 
         image = image.convert('RGB')
 
-        max_edge_length = 369   # TODO find this programatically
+        # max_edge_length = 369   # TODO find this programatically
 
         # Define transformations for the image
         transformation = transforms.Compose([
-            transforms.CenterCrop((max_edge_length)),
+            # transforms.CenterCrop((max_edge_length)),
             transforms.Resize(32),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -423,6 +436,13 @@ class MugPipeline():
         if classes[index] != self.num_mugs:
             print('predicted {} mugs - WRONG, the actual number of mugs is {}!'.format(
                 classes[index], self.num_mugs))
+
+            f = open(self.metadata_filename, "a")
+            f.write('\n----------\n')
+            f.write('predicted {} mugs - WRONG, the actual number of mugs is {}!'.format(
+                classes[index], self.num_mugs))
+            f.close()
+
             # TODO in this case, don't just use the highest -- it needs to be the right mug
         # else:
         #     print('this is correct')
@@ -441,7 +461,14 @@ class MugPipeline():
         model.load_state_dict(checkpoint)
         model.eval()
 
-        # print('POSES:', poses)
+        if self.folder_name == "data_pycma":
+            for i in range(len(poses)):
+                if i % 7 == 4 or i % 7 == 5:
+                    poses[i] = poses[i] / 10.0
+                elif i % 7 == 6:
+                    poses[i] = poses[i] / 20.0 + 0.15
+
+        # print('initial_poses:', poses)
         self.initial_poses = poses
         self.all_poses.append(self.initial_poses)
 
@@ -462,11 +489,24 @@ class MugPipeline():
 
         # Return probabilities
         probability = probabilities[self.num_mugs - 1]
+
         print('iteration: {}, probabilities: {}, probability: {}'.format(
             self.iteration_num, probabilities, probability))
         print('      {}'.format(self.initial_poses))
-        self.iteration_num += 1
+
+        f = open(self.metadata_filename, "a")
+        f.write('\n----------\n')
+        f.write('iteration: {}, probabilities: {}, probability: {}'.format(
+            self.iteration_num, probabilities, probability))
+        f.close()
+
         self.all_probabilities.append(probability)
+
+        if self.iteration_num % 100 == 0:
+            print('all_probabilities', self.all_probabilities)
+
+        self.iteration_num += 1
+
         return probability
 
 
@@ -517,6 +557,7 @@ class Optimizer():
     def plot_graphs(self):
         fig2, ax = plt.subplots()
         all_probabilities = self.mug_pipeline.get_all_probabilities()
+        print(all_probabilities)
         ax.plot(all_probabilities)
         ax.set(xlabel='Iteration', ylabel='Probability')
         ax.set_xlim(xmin=0, xmax=len(all_probabilities))
@@ -558,90 +599,61 @@ class Optimizer():
         print('all_poses: {}, all_probabilities: {}'.format(
             self.mug_pipeline.get_all_poses(), self.mug_pipeline.get_all_probabilities()))
 
-    # def run_pycma(self):
-    #     """
+    def run_pycma(self):
+        """
+            Covariance Matrix Evolution Strategy (CMA-ES)
+        """
+        self.mug_pipeline.set_folder_name("data_pycma")
+        es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0, 
+            {'bounds': [-1.0, 1.0], 'verb_disp': 1})
+        es.optimize(self.mug_pipeline.run_inference)
+        es.result_pretty()
 
-    #     """
-    #     mug_pipeline.set_folder_name("data_pycma")
+        cma.plot()
 
-    #     pass
+    def run_scipy_fmin_slsqp(self):
+        """
+            Local optimization (sequential least square programming)
+        """
+        self.mug_pipeline.set_folder_name("data_scipy_fmin_slsqp")
 
-    # def run_scipy_fmin_slsqp(self):
-    #     """
+        mug_initials = \
+            [0.80318661, 0.23925861, -0.17375544, -0.51716113, -0.05577754, -0.00002082, 0.18672807, 
+            -0.82975143, -0.12051900, -0.03752475, -0.54367236, -0.05793993, -0.07058323, 0.13473190, 
+            0.60546342, -0.38073887, 0.65221595, 0.25113008, 0.04118729, 0.05237785, 0.16974618]
 
-    #     """
-    #     mug_pipeline.set_folder_name("data_fmin_slsqp")
+        ##### FIGURE OUT WHY setting this gives a configuration error
+        # this should work?
+        # mug_initial = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-    #     # mug_initials = [0.80318661, 0.23925861, -0.17375544, -0.51716113, -0.05577754, -0.00002082, 0.18672807, 
-    #     #     -0.82975143, -0.12051900, -0.03752475, -0.54367236, -0.05793993, -0.07058323, 0.13473190, 
-    #     #     0.60546342, -0.38073887, 0.65221595, 0.25113008, 0.04118729, 0.05237785, 0.16974618]
+        mug_bound = [(-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-0.1, 0.1), (-0.1, 0.1), (0.1, 0.2)]
 
-    #     ##### FIGURE OUT WHY setting this gives a configuration error
-    #     # this should work?
-    #     mug_initial = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        mug_bounds = []
+        for i in range(0, 3):
+            mug_bounds += mug_bound
 
-    #     # mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
-    #     # mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
-    #     # mug_bounds = ((-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1), (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2))
-    #     mug_bound = [(-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-0.1, 0.1), (-0.1, 0.1), (0.1, 0.2)]
+        exit_mode = optimize.fmin_slsqp(self.mug_pipeline.run_inference, mug_initials,
+            bounds=mug_bounds, full_output=True, iter=self.max_evaluations)
 
-    #     mug_initials = []
-    #     mug_bounds = []
-    #     # mug_lower_bounds = []
-    #     # mug_upper_bounds = []
-    #     for i in range(0, 3):
-    #         mug_initials += mug_initial
-    #         mug_bounds += mug_bound
-    #         # mug_lower_bounds += mug_lower_bound
-    #         # mug_upper_bounds += mug_upper_bound
-
-    #     # print(mug_initials)
-    #     # print(mug_bounds)
-    #     # print(mug_lower_bounds)
-    #     # print(mug_upper_bounds)
-
-    #     # optimize.minimize(run_inference, mug_initials, bounds=(mug_lower_bounds, mug_upper_bounds),
-    #     #     method='Powell', options={'maxiter':1000, 'disp': True}) # Powell, "Nelder-Mead") method='BFGS')
-
-    #     exit_mode = optimize.fmin_slsqp(run_inference, mug_initials, bounds=mug_bounds, full_output=True, iter=500)
-    #     # maybe change epsilon?
-
-    #     print(exit_mode)
-
-    #     # objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
-    #     # state_path = os.path.join(package_directory, 'state.dat')
-    #     # print(state_path)
-    #     # alg.save_to_file(state_path)
-
-    #     global all_poses
-    #     global all_probabilities
-
-    #     print('all poses:', all_poses)
-    #     print('all probabilities', all_probabilities)
-
-    #     fig2, ax = plt.subplots()
-    #     ax.plot(all_probabilities)
-    #     ax.set(xlabel='Iteration', ylabel='Probability')
-    #     ax.set_xlim(xmin=0, xmax=31)
-    #     ax.set_ylim(ymin=0.95, ymax=1.0)
-    #     ax.grid()
-    #     fig2.savefig(os.path.join(package_directory, 'probability_plot.png'))
-    #     plt.show()
+        print(exit_mode)
 
 def main():
     mug_initial_pose = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
     mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
     optimizer = Optimizer(num_mugs=3, mug_initial_pose=mug_initial_pose,
-        mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound, max_evaluations=300)
+        mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound, max_evaluations=500)
+
+    # optimizer.run_rbfopt()
+    # optimizer.plot_graphs()
 
     # Run all the optimizers
     # optimizer.plot_graphs(optimizer.run_nevergrad())
 
-    optimizer.run_rbfopt()
-    optimizer.plot_graphs()
     # optimizer.run_pycma()
-    # optimizer.run_scipy_fmin_slsqp()
+    # optimizer.plot_graphs()
+    optimizer.run_scipy_fmin_slsqp()
+    optimizer.plot_graphs()
 
 if __name__ == "__main__":
     main()
