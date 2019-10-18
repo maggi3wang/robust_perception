@@ -140,7 +140,7 @@ def main():
 
             mbp.Finalize()
 
-            print(poses)
+            # print(poses)
 
             # Add meshcat visualizer
             # blockPrint()
@@ -278,9 +278,7 @@ def main():
             n = 7
 
             initial_poses = list(divide_chunks(initial_poses, n))
-            print('initial', initial_poses)
             after_solver_poses = list(divide_chunks(after_solver_poses, n))
-            print('after', after_solver_poses)
             final_poses = list(divide_chunks(final_poses, n))
 
             for pose in initial_poses:
