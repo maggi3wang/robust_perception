@@ -9,7 +9,7 @@ import os
 import shutil
 
 NUM_CLASSES = 5
-NUM_TRAINING = 1000
+NUM_TRAINING = 7000
 
 classification = 'images/classification'
 classification_clean_dir = 'images/classification_clean'

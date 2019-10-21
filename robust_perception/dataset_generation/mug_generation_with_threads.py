@@ -343,14 +343,6 @@ if __name__ == "__main__":
 
     result = pool.map(GenerationWorker(output_queue=output_queue), range(start_iteration_num, end_iteration_num))
 
-    # while not result.ready():
-    #     try:
-    #         if not output_queue.empty():
-    #             env = output_queue.get(timeout=0)
-
-    #     except Exception as e:
-    #         print ("Unhandled exception while saving data", e)
-
     end_time = time.time()
     elapsed = end_time - start_time
 
