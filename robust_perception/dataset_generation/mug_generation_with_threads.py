@@ -336,11 +336,12 @@ if __name__ == "__main__":
     output_queue = manager.Queue()
     start_iteration_num = 6988
     end_iteration_num = 10000
-    # total_num_iterations = 10000
+    total_num_iterations = end_iteration_num - start_iteration_num
+    assert(total_num_iterations > 0)
 
     # 4_06988_color
 
-    result = pool.map(GenerationWorker(output_queue=output_queue), range(total_num_iterations))
+    result = pool.map(GenerationWorker(output_queue=output_queue), range(start_iteration_num, end_iteration_num))
 
     # while not result.ready():
     #     try:
