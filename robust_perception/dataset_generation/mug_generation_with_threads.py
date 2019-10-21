@@ -270,7 +270,7 @@ class GenerationWorker(object):
             q0_final = mbp.GetPositions(mbp_context).copy()
             # print('q0_final: ', q0_final)
 
-            filename = 'robust_perception/dataset_generation/images1/classification/{}/{}_{:04d}'.format(
+            filename = 'robust_perception/dataset_generation/images1/classification/{}/{}_{:05d}'.format(
                 n_objects, n_objects, iter_num)
             
             rgb_and_label_image_visualizer.save_image(filename)
@@ -334,7 +334,11 @@ if __name__ == "__main__":
     manager = Manager()
 
     output_queue = manager.Queue()
-    total_num_iterations = 10000
+    start_iteration_num = 6988
+    end_iteration_num = 10000
+    # total_num_iterations = 10000
+
+    # 4_06988_color
 
     result = pool.map(GenerationWorker(output_queue=output_queue), range(total_num_iterations))
 
