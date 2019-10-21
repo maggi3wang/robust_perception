@@ -88,12 +88,15 @@ class RgbAndLabelImageVisualizer(LeafSystem):
 
 
 def main():
-    np.random.seed(46)
-    random.seed(46)
+    # np.random.seed(46)
+    # random.seed(46)
+    # switched to 47 at 1544
+    np.random.seed(47)
+    random.seed(47)
     max_n_objects = 5
     package_directory = os.path.dirname(os.path.abspath(__file__))
 
-    for scene_iter in range(0, 20000):
+    for scene_iter in range(1544, 20000):
         try:
             builder = DiagramBuilder()
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
@@ -261,7 +264,7 @@ def main():
 
             filename = 'robust_perception/dataset_generation/images/classification/{}/{}_{:04d}'.format(
                 n_objects, n_objects, scene_iter)
-            # time.sleep(0.5)
+            
             rgb_and_label_image_visualizer.save_image(filename)
 
             metadata_filename = filename + '_metadata.txt'
@@ -303,7 +306,6 @@ def main():
             f.close()
 
             print('DONE with iteration ' + str(scene_iter) + '!')
-            # time.sleep(5.0)
 
         except Exception as e:
             print("Unhandled exception ", e)
