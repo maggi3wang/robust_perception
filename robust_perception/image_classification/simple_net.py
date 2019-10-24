@@ -80,180 +80,174 @@ class SimpleNet(nn.Module):
         output = self.fc(output)
         return output
 
-def setup_model():
-    # Transformation for image
-    transform_ori = transforms.Compose([transforms.Resize(32),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(
-                                            mean=[0.485, 0.456, 0.406],
-                                            std=[0.229, 0.224, 0.225])])
+class MyNet():
+    def __init__(self):
+        # Transformation for image
+        self.transform = transforms.Compose([transforms.Resize(32),
+                                            transforms.ToTensor(),
+                                            transforms.Normalize(
+                                                mean=[0.485, 0.456, 0.406],
+                                                std=[0.229, 0.224, 0.225])])
 
-    # Load our dataset
-    train_dataset = datasets.ImageFolder(
-        root='../dataset_generation/images/classification_clean/training_set',
-        transform=transform_ori)
+        # Load our dataset
+        # TODO change to run from top folder
+        train_dataset = datasets.ImageFolder(
+            root='../dataset_generation/images/classification_clean/training_set',
+            transform=self.transform)
 
-    test_dataset = datasets.ImageFolder(
-        root='../dataset_generation/images/classification_clean/testing_set',
-        transform=transform_ori)
+        test_dataset = datasets.ImageFolder(
+            root='../dataset_generation/images/classification_clean/testing_set',
+            transform=self.transform)
 
-    batch_size = 32
+        # batch_size = 32
 
-    train_loader = torch.utils.data.DataLoader(train_dataset,
-                                               batch_size=4, shuffle=True,
-                                               num_workers=4)
+        self.train_loader = torch.utils.data.DataLoader(train_dataset,
+                                                        batch_size=4, shuffle=True,
+                                                        num_workers=4)
 
-    test_loader = torch.utils.data.DataLoader(test_dataset,
-                                              batch_size=4, shuffle=True,
-                                              num_workers=4)
+        self.test_loader = torch.utils.data.DataLoader(test_dataset,
+                                                       batch_size=4, shuffle=True,
+                                                       num_workers=4)
 
+        self.training_set_size = len(train_dataset)
+        self.test_set_size = len(test_dataset)
 
-    training_set_size = len(train_dataset)
-    test_set_size = len(test_dataset)
+        print('There are {} images in the training set'.format(self.training_set_size))
+        print('There are {} images in the test set'.format(self.test_set_size))
+        print('There are {} batches in the train loader'.format(len(self.train_loader)))
+        print('There are {} batches in the test loader'.format(len(self.test_loader)))
 
-    print('There are {} images in the training set'.format(training_set_size))
-    print('There are {} images in the test set'.format(test_set_size))
-    print('There are {} batches in the train loader'.format(len(train_loader)))
-    print('There are {} batches in the test loader'.format(len(test_loader)))
+        # Check if gpu support is available
+        self.cuda_avail = torch.cuda.is_available()
 
-    # Check if gpu support is available
-    cuda_avail = torch.cuda.is_available()
+        # Create model, optimizer, and loss function
+        self.model = SimpleNet(num_classes=5)
+        print('created a model')
 
-    # Create model, optimizer, and loss function
-    model = SimpleNet(num_classes=5)
-    print('created a model')
+        if self.cuda_avail:
+            self.model.cuda()
 
-    if cuda_avail:
-        model.cuda()
+        self.initial_lr = 0.001
 
-    # Define the optimizer and loss function
-    optimizer = Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
-    loss_fn = nn.CrossEntropyLoss()
-    print('defined the optimizer and loss fn')
+        # Define the optimizer and loss function
+        self.optimizer = Adam(self.model.parameters(), lr=self.initial_lr, weight_decay=0.0001)
+        self.loss_fn = nn.CrossEntropyLoss()
 
-# Create a learning rate adjustment function that divides the learning rate by 10 every 30 epochs
-def adjust_learning_rate(epoch):
-    lr = 0.001
+    def adjust_learning_rate(self, epoch):
+        """
+        Learning rate adjustment function that divides the learning rate by 
+        10 every 30 epochs
+        """
+        lr = self.initial_lr
+        adj = epoch / 30
+        lr = lr / (10**adj)
 
-    if epoch > 180:
-        lr = lr / 1000000
-    elif epoch > 150:
-        lr = lr / 100000
-    elif epoch > 120:
-        lr = lr / 10000
-    elif epoch > 90:
-        lr = lr / 1000
-    elif epoch > 60:
-        lr = lr / 100
-    elif epoch > 30:
-        lr = lr / 10
+        for param_group in self.optimizer.param_groups:
+            param_group["lr"] = lr
 
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = lr
+    def save_models(self, epoch):
+        """
+        Save and evaluate the model.
+        """
+        torch.save(self.model.state_dict(), "mug_numeration_classifier.model")
+        print("checkpoint saved")
 
-# Save and evaluate the model
-def save_models(epoch):
-    torch.save(model.state_dict(), "mug_numeration_classifier.model")
-    print("checkpoint saved")
+    def test(self):
+        """
+        Returns accuracy of model determined from test images
+        """
 
-def test():
-    model.eval()
-    test_acc = 0.0
+        self.model.eval()
+        test_acc = 0.0
 
-    # Iterate over the test loader
-    for i, (images, labels) in enumerate(test_loader):
+        # Iterate over the test loader
+        for i, (images, labels) in enumerate(self.test_loader):
 
-        if cuda_avail:
-            images = Variable(images.cuda())
-            labels = Variable(labels.cuda())
-
-        # Predict classes using images from the test set
-        outputs = model(images)
-
-        # Pick max prediction
-        _, prediction = torch.max(outputs.data, 1)
-
-        prediction_np = prediction.cpu().numpy()
-        labels_np = labels.data.cpu().numpy()
-
-        images_np = images.data.cpu().numpy()
-
-        # for j, prediction in enumerate(prediction_np):
-        #     if prediction != labels_np[j]:
-        #         print('prediction: {}, actual: {}'.format(prediction, labels_np[j]))
-                # img = np.array(images_np[j] * 255, np.int32)
-                # fig = plt.figure(figsize=(32, 32))
-                # plt.imshow(np.transpose(img, (1, 2, 0)))
-                # plt.show()
-
-        # Compare to actual class to obtain accuracy
-        test_acc += torch.sum(prediction == labels.data).float()
-
-    # Compute the average ac and loss over all test images
-    test_acc = test_acc / test_set_size
-
-    return test_acc
-
-def train(num_epochs):
-    print('training with {} epochs'.format(num_epochs))
-
-    best_acc = 0.0
-
-    for epoch in range(num_epochs):
-        model.train()
-        train_acc = 0.0
-        train_loss = 0.0
-
-        for i, (images, labels) in enumerate(train_loader):
-            # Move images and labels to gpu if available
-            if cuda_avail:
+            if self.cuda_avail:
                 images = Variable(images.cuda())
                 labels = Variable(labels.cuda())
-            
-            # Clear all accumulated gradients
-            optimizer.zero_grad()
 
             # Predict classes using images from the test set
-            outputs = model(images)
+            outputs = self.model(images)
 
-            # Compute the loss based on the predictions and actual labels
-            loss = loss_fn(outputs, labels)
-
-            # Backpropagate the loss
-            loss.backward()
-
-            # Adjust parameters according to the computed gradients
-            optimizer.step()
-
-            train_loss += loss.cpu().item() * images.size(0)
+            # Pick max prediction
             _, prediction = torch.max(outputs.data, 1)
 
-            train_acc += torch.sum(prediction == labels.data).float()
+            prediction_np = prediction.cpu().numpy()
+            labels_np = labels.data.cpu().numpy()
+            images_np = images.data.cpu().numpy()
 
-        # Call the learning rate adjustment function
-        adjust_learning_rate(epoch)
+            # Compare to actual class to obtain accuracy
+            test_acc += torch.sum(prediction == labels.data).float()
 
-        # Compute the average acc and loss over all 50,000 training images
-        train_acc = train_acc / training_set_size
-        train_loss = train_loss / training_set_size
+        # Compute the average acc and loss over all test images
+        test_acc = test_acc / self.test_set_size
 
-        # Evaluate on the test set
-        test_acc = test()
+        return test_acc
 
-        # Save the model if the test acc is greater than our current best
-        if test_acc > best_acc:
-            save_models(epoch)
-            best_acc = test_acc
-            print("New best acc is {}, epoch {}".format(best_acc, epoch))
+    def train(self, num_epochs):
+        """
+        Trains model with with num_epochs epochs.
+        """
 
-        # Print the metrics
-        print("Epoch {}, Train Accuracy: {}, Train Loss: {}, Test Accuracy: {}".format(
-            epoch, train_acc, train_loss, test_acc))
+        print('training with {} epochs'.format(num_epochs))
+
+        best_acc = 0.0
+
+        for epoch in range(num_epochs):
+            self.model.train()
+            train_acc = 0.0
+            train_loss = 0.0
+
+            for i, (images, labels) in enumerate(self.train_loader):
+                # Move images and labels to gpu if available
+                if self.cuda_avail:
+                    images = Variable(images.cuda())
+                    labels = Variable(labels.cuda())
+                
+                # Clear all accumulated gradients
+                self.optimizer.zero_grad()
+
+                # Predict classes using images from the test set
+                outputs = self.model(images)
+
+                # Compute the loss based on the predictions and actual labels
+                loss = self.loss_fn(outputs, labels)
+
+                # Backpropagate the loss
+                loss.backward()
+
+                # Adjust parameters according to the computed gradients
+                self.optimizer.step()
+
+                train_loss += loss.cpu().item() * images.size(0)
+                _, prediction = torch.max(outputs.data, 1)
+
+                train_acc += torch.sum(prediction == labels.data).float()
+
+            # Call the learning rate adjustment function
+            self.adjust_learning_rate(epoch)
+
+            # Compute the average acc and loss over all 50,000 training images
+            train_acc = train_acc / self.training_set_size
+            train_loss = train_loss / self.training_set_size
+
+            # Evaluate on the test set
+            test_acc = self.test()
+
+            # Save the model if the test acc is greater than our current best
+            if test_acc > best_acc:
+                self.save_models(epoch)
+                best_acc = test_acc
+                print("New best acc is {}, epoch {}".format(best_acc, epoch))
+
+            # Print the metrics
+            print("Epoch {}, Train Accuracy: {}, Train Loss: {}, Test Accuracy: {}".format(
+                epoch, train_acc, train_loss, test_acc))
 
 def main():
-    setup_model()
-    train(num_epochs=200)
+    net = MyNet()
+    net.train(num_epochs=200)
 
-# path = "mug_numeration_classifier.pth"
-# print('saving model to {}'.format(path))
-# torch.save(model.state_dict(), path)
+if __name__ == "__main__":
+    main()

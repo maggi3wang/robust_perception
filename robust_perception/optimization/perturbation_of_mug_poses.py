@@ -3,6 +3,8 @@ import argparse
 import datetime
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from multiprocessing import Pool, Queue, Manager
+import multiprocessing
 import numpy as np
 import os
 import random
@@ -637,6 +639,52 @@ class Optimizer():
 
         print(exit_mode)
 
+    def run_scipy_nelder_mead(self, num_workers):
+        """
+        For local search methods, we want to create n parallel processes with random initial poses.
+        Each time the process finds a counter example, kill the current process and spawn a
+        new process; this allows us to find counter exs that are dissimilar to each other.
+        """
+
+        multiprocessing.set_start_method('spawn')
+        
+        start_time = time.time()
+
+        num_workers = 20
+        pool = Pool(num_workers)
+        manager = Manager()
+
+        output_queue = manager.Queue()
+        start_iteration_num = 6988
+        end_iteration_num = 10000
+        total_num_iterations = end_iteration_num - start_iteration_num
+        assert(total_num_iterations > 0)
+
+        result = pool.map(GenerationWorker(output_queue=output_queue), range(start_iteration_num, end_iteration_num))
+
+
+        self.mug_pipeline.set_folder_name("data_scipy_nelder_mead")
+
+        mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
+        mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
+
+        # Randomly initialize mug
+        pose = RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz()
+        position = [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1),
+                    np.random.uniform(0.1, 0.2)]
+        mug_initials = pose + position
+
+        mug_lower_bounds = []
+        mug_upper_bounds = []
+
+        for i in range(0, 3):
+            mug_lower_bounds += mug_lower_bound
+            mug_upper_bounds += mug_upper_bound
+
+        optimize.minimize(self.mug_pipeline.run_inference, mug_initials,
+            bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
+            options={'maxiter':1000, 'disp': True})
+
 def main():
     mug_initial_pose = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
@@ -652,7 +700,11 @@ def main():
 
     # optimizer.run_pycma()
     # optimizer.plot_graphs()
-    optimizer.run_scipy_fmin_slsqp()
+
+    # optimizer.run_scipy_fmin_slsqp()
+    # optimizer.plot_graphs()
+
+    optimizer.run_scipy_nelder_mead(num_workers=30)
     optimizer.plot_graphs()
 
 if __name__ == "__main__":
