@@ -64,6 +64,7 @@ import nevergrad as ng
 import rbfopt
 from scipy import optimize
 import cma
+from cma.fitness_transformations import EvalParallel2
 
 # Local imports
 from ..image_classification.simple_net import SimpleNet
@@ -454,7 +455,9 @@ class MugPipeline():
     def run_inference(self, poses):
         """
         Optimizer's entry point function
+        It must be a function, not an instancemethod, to work with multiprocessing
         """
+        print('IN BEG OF RUN INFERENCE')
 
         path = os.path.join(self.package_directory,
             '../image_classification/mug_numeration_classifier.model')
@@ -509,6 +512,7 @@ class MugPipeline():
 
         self.iteration_num += 1
 
+        print('RETURNED PROB')
         return probability
 
 
@@ -544,11 +548,23 @@ class Optimizer():
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
 
     @staticmethod
-    def run_inference(poses):
+    def run_inference(poses, mug_pipeline):
         """
         Wrapper for optimizer's entry point function
         """
-        return self.mug_pipeline.run_inference(poses)
+
+        # self.mug_initial_poses = \
+        #     [0.80318661, 0.23925861, -0.17375544, -0.51716113, -0.05577754, -0.00002082, 0.18672807, 
+        #     -0.82975143, -0.12051900, -0.03752475, -0.54367236, -0.05793993, -0.07058323, 0.13473190, 
+        #     0.60546342, -0.38073887, 0.65221595, 0.25113008, 0.04118729, 0.05237785, 0.16974618]
+
+        # num_mugs = 3
+        # mug_pipeline = MugPipeline(num_mugs=num_mugs, initial_poses=poses)
+        # mug_pipeline.set_folder_name("data_pycma_new")
+        # return self.mug_pipeline.run_inference(poses)
+        prob = mug_pipeline.run_inference(poses)
+        print('got prob')
+        return prob
 
     # def run_optimizer():
     #     if optimizer_type == 'nevergrad':
@@ -605,13 +621,57 @@ class Optimizer():
         """
             Covariance Matrix Evolution Strategy (CMA-ES)
         """
-        self.mug_pipeline.set_folder_name("data_pycma")
-        es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0, 
-            {'bounds': [-1.0, 1.0], 'verb_disp': 1})
-        es.optimize(self.mug_pipeline.run_inference)
-        es.result_pretty()
+        # self.mug_pipeline.set_folder_name("data_pycma")
+        # es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0, 
+        #     {'bounds': [-1.0, 1.0], 'verb_disp': 1})
+        # es.optimize(self.mug_pipeline.run_inference)
+        # es.result_pretty()
 
-        cma.plot()
+        # cma.plot()
+
+        self.mug_pipeline.set_folder_name("data_pycma_new")
+
+        self.mug_initial_poses = \
+            [0.80318661, 0.23925861, -0.17375544, -0.51716113, -0.05577754, -0.00002082, 0.18672807, 
+            -0.82975143, -0.12051900, -0.03752475, -0.54367236, -0.05793993, -0.07058323, 0.13473190, 
+            0.60546342, -0.38073887, 0.65221595, 0.25113008, 0.04118729, 0.05237785, 0.16974618]
+
+        es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0,
+            {'bounds': [-1.0, 1.0], 'verb_disp': 1})
+
+        # with EvalParallel2(number_of_processes=12) as eval_all:
+        #     while not es.stop():
+        #         X = es.ask()
+        #         es.tell(X, eval_all(X, cma.fitness_functions.elli))
+        #     assert es.result[1] < 1e-13 and es.result[2] < 1500
+
+        ep = EvalParallel2(self.run_inference)
+        
+        while not es.stop():
+            X = es.ask()
+            ep(X, args=(self.mug_pipeline,))
+
+        ep.terminate()
+
+
+        # num_processes = 4
+        # ep = EvalParallel2(self.run_inference, num_processes)
+        # ep(self.mug_initial_poses, args=self.mug_pipeline)
+        # ep.terminate()
+
+        # with EvalParallel(20) as eval_all:
+        #     while not es.stop():
+        #         X = es.ask()
+        #         es.tell(X, eval_all(self.run_inference, X, args=self.mug_pipeline))
+        #         print('in here')
+
+        # with EvalParallel(20) as eval_all:
+        #     while not es.stop():
+        #         X = es.ask()
+        #         # es.tell(X, eval_all(self.run_inference, X))
+        #         fit = [self.run_inference(x, self.mug_pipeline) for x in X]
+        #         es.tell(X, fit)
+        #         print('in here')
 
     def run_scipy_fmin_slsqp(self):
         """
@@ -692,20 +752,24 @@ def main():
     optimizer = Optimizer(num_mugs=3, mug_initial_pose=mug_initial_pose,
         mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound, max_evaluations=500)
 
+    ## Global optimizers
+
     # optimizer.run_rbfopt()
     # optimizer.plot_graphs()
 
     # Run all the optimizers
     # optimizer.plot_graphs(optimizer.run_nevergrad())
 
-    # optimizer.run_pycma()
-    # optimizer.plot_graphs()
+    optimizer.run_pycma()
+    optimizer.plot_graphs()
+
+    ## Local optimizers
 
     # optimizer.run_scipy_fmin_slsqp()
     # optimizer.plot_graphs()
 
-    optimizer.run_scipy_nelder_mead(num_workers=30)
-    optimizer.plot_graphs()
+    # optimizer.run_scipy_nelder_mead(num_workers=30)
+    # optimizer.plot_graphs()
 
 if __name__ == "__main__":
     main()
