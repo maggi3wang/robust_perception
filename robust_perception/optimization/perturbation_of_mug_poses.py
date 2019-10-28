@@ -3,7 +3,7 @@ import argparse
 import datetime
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from multiprocessing import Pool, Queue, Manager
+from multiprocessing import Pool, Queue, Manager, Lock
 import multiprocessing
 import numpy as np
 import os
@@ -465,15 +465,16 @@ class MugPipeline():
         model = SimpleNet(num_classes=5)
         model.load_state_dict(checkpoint)
         model.eval()
+        print('loaded model')
 
-        if self.folder_name == "data_pycma":
+        if "pycma" in self.folder_name:
             for i in range(len(poses)):
                 if i % 7 == 4 or i % 7 == 5:
                     poses[i] = poses[i] / 10.0
                 elif i % 7 == 6:
                     poses[i] = poses[i] / 20.0 + 0.15
 
-        # print('initial_poses:', poses)
+        print('initial_poses:', poses)
         self.initial_poses = poses
         self.all_poses.append(self.initial_poses)
 
@@ -510,13 +511,17 @@ class MugPipeline():
         if self.iteration_num % 100 == 0:
             print('all_probabilities', self.all_probabilities)
 
-        self.iteration_num += 1
-
         print('RETURNED PROB')
         return probability
 
+    def set_iteration_num(self, iteration_num):
+        self.iteration_num = iteration_num
+        print('setting iter num: ', iteration_num)
 
 class Optimizer():
+    iteration_num = 0
+    lock = multiprocessing.Lock()
+
     def __init__(self, num_mugs, mug_initial_pose, mug_lower_bound, mug_upper_bound,
             max_evaluations):
         """
@@ -552,18 +557,17 @@ class Optimizer():
         """
         Wrapper for optimizer's entry point function
         """
+        # Optimizer.iteration_num_lock.acquire()
+        # lock.acquire()
+        Optimizer.lock.acquire()
+        print('initial iter num: ', Optimizer.iteration_num)
+        Optimizer.iteration_num += 1
+        print('final iteration_num: ', Optimizer.iteration_num)
+        mug_pipeline.set_iteration_num(Optimizer.iteration_num)
+        # Optimizer.iteration_num_lock.release()
+        Optimizer.lock.release()
 
-        # self.mug_initial_poses = \
-        #     [0.80318661, 0.23925861, -0.17375544, -0.51716113, -0.05577754, -0.00002082, 0.18672807, 
-        #     -0.82975143, -0.12051900, -0.03752475, -0.54367236, -0.05793993, -0.07058323, 0.13473190, 
-        #     0.60546342, -0.38073887, 0.65221595, 0.25113008, 0.04118729, 0.05237785, 0.16974618]
-
-        # num_mugs = 3
-        # mug_pipeline = MugPipeline(num_mugs=num_mugs, initial_poses=poses)
-        # mug_pipeline.set_folder_name("data_pycma_new")
-        # return self.mug_pipeline.run_inference(poses)
         prob = mug_pipeline.run_inference(poses)
-        print('got prob')
         return prob
 
     # def run_optimizer():
@@ -639,20 +643,24 @@ class Optimizer():
         es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0,
             {'bounds': [-1.0, 1.0], 'verb_disp': 1})
 
-        # with EvalParallel2(number_of_processes=12) as eval_all:
-        #     while not es.stop():
-        #         X = es.ask()
-        #         es.tell(X, eval_all(X, cma.fitness_functions.elli))
-        #     assert es.result[1] < 1e-13 and es.result[2] < 1500
+        # ep = EvalParallel()
+        # iteration_num_lock = Lock()
+        
+        # while not es.stop():
+        #     X = es.ask()
+        #     ep(self.run_inference, X, args=(self.mug_pipeline, iteration_num_lock))
+        
+        # ep.terminate()
 
-        ep = EvalParallel2(self.run_inference)
+        ep = EvalParallel2(self.run_inference, number_of_processes=10)
+        # iteration_num_lock = Lock()
+        # iteration_num_lock = multiprocessing.Lock()
         
         while not es.stop():
             X = es.ask()
-            ep(X, args=(self.mug_pipeline,))
-
+            ep(X, args=(self.mug_pipeline,)) #, iteration_num_lock))
+        
         ep.terminate()
-
 
         # num_processes = 4
         # ep = EvalParallel2(self.run_inference, num_processes)
