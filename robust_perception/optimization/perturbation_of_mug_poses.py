@@ -4,6 +4,7 @@
 from functools import partial
 import numpy as np
 from multiprocessing import Pool as ProcessingPool
+import warnings
 
 class EvalParallel3(object):
     def __init__(self, fitness_function=None, number_of_processes=None):
@@ -193,6 +194,12 @@ class MugPipeline():
 
         self.metadata_filename = None
 
+        if torch.cuda.is_available():
+            cuda.init()
+            torch.cuda.set_device(0)
+            print('curr_device', torch.cuda.current_device())
+            print(cuda.Device(0).name())
+
     def get_all_poses(self):
         return self.all_poses
 
@@ -259,7 +266,7 @@ class MugPipeline():
 
             mbp.Finalize()
 
-            print(poses)
+            # print(poses)
 
             # Add meshcat visualizer
             # blockPrint()
@@ -462,11 +469,7 @@ class MugPipeline():
         # Add an extra batch dimension since pytorch treats all images as batches
         image_tensor = image_tensor.unsqueeze_(0)
 
-        if torch.cuda.is_available():
-            torch.cuda.set_device(0)
-            print('curr_device', torch.cuda.current_device())
-            print(cuda.Device(0).name())
-            image_tensor.cuda()
+        image_tensor.cuda()
 
         # Turn the input into a Variable
         input = Variable(image_tensor)
@@ -521,7 +524,6 @@ class MugPipeline():
         model = SimpleNet(num_classes=5)
         model.load_state_dict(checkpoint)
         model.eval()
-        print('loaded model')
 
         if "pycma" in self.folder_name:
             for i in range(len(poses)):
@@ -530,7 +532,6 @@ class MugPipeline():
                 elif i % 7 == 6:
                     poses[i] = poses[i] / 20.0 + 0.15
 
-        print('initial_poses:', poses)
         self.initial_poses = poses
         self.all_poses.append(self.initial_poses)
 
@@ -599,7 +600,6 @@ class Optimizer():
         """
         Wrapper for optimizer's entry point function
         """
-        print("iteration_num", iteration_num)
         prob = mug_pipeline.run_inference(iteration_num, poses)
         return prob
 
@@ -677,16 +677,18 @@ class Optimizer():
             {'bounds': [-1.0, 1.0], 'verb_disp': 1})
 
         num_processes = 20
-        ep = EvalParallel3(self.run_inference, number_of_processes=num_processes)
-
         iter_num = 0
-        
+
         while not es.stop():
+            # TODO there must be a way to not run out of CUDA memory
+            # and move this outside of the while...
+            ep = EvalParallel3(self.run_inference, number_of_processes=num_processes)
             lst = range(iter_num, iter_num + num_processes)
             X = es.ask()
             ep(X, lst=lst, args=(self.mug_pipeline,))
             iter_num += num_processes
-        ep.terminate()
+            torch.cuda.empty_cache()
+            ep.terminate()
 
     def run_scipy_fmin_slsqp(self):
         """
@@ -720,8 +722,6 @@ class Optimizer():
         Each time the process finds a counter example, kill the current process and spawn a
         new process; this allows us to find counter exs that are dissimilar to each other.
         """
-
-        multiprocessing.set_start_method('spawn')
         
         start_time = time.time()
 
@@ -766,6 +766,8 @@ def main():
     mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
     optimizer = Optimizer(num_mugs=3, mug_initial_pose=mug_initial_pose,
         mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound, max_evaluations=500)
+
+    multiprocessing.set_start_method('spawn')
 
     ## Global optimizers
 
