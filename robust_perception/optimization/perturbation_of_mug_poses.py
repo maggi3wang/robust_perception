@@ -1,9 +1,64 @@
+# """Wrapper for objective functions like noise, rotation, gluing args
+# """
+# from __future__ import absolute_import, division, print_function  #, unicode_literals, with_statement
+from functools import partial
+import numpy as np
+from multiprocessing import Pool as ProcessingPool
+
+class EvalParallel3(object):
+    def __init__(self, fitness_function=None, number_of_processes=None):
+        self.fitness_function = fitness_function
+        self.processes = number_of_processes
+        self.pool = ProcessingPool(self.processes)
+
+    def __call__(self, solutions, fitness_function=None, lst=None, args=(), timeout=None):
+        """evaluate a list/sequence of solution-"vectors", return a list
+        of corresponding f-values.
+        Raises `multiprocessing.TimeoutError` if `timeout` is given and
+        exceeded.
+        """
+        fitness_function = fitness_function or self.fitness_function
+        if fitness_function is None:
+            raise ValueError("`fitness_function` was never given, must be"
+                             " passed in `__init__` or `__call__`")
+        warning_str = ("WARNING: `fitness_function` must be a function,"
+                       " not an instancemethod, in order to work with"
+                       " `multiprocessing`")
+        if isinstance(fitness_function, type(self.__init__)):
+            warnings.warn(warning_str)
+        jobs = [self.pool.apply_async(fitness_function, (x,iter_num) + args)
+                for x, iter_num in zip(solutions, lst)]
+        try:
+            return [job.get(timeout) for job in jobs]
+        except:
+            warnings.warn(warning_str)
+            raise
+
+    def terminate(self):
+        """free allocated processing pool"""
+        # self.pool.close()  # would wait for job termination
+        self.pool.terminate()  # terminate jobs regardless
+        self.pool.join()  # end spawning
+
+    def __enter__(self):
+        # we could assign self.pool here, but then `EvalParallel2` would
+        # *only* work when using the `with` statement
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.terminate()
+
+    def __del__(self):
+        """though generally not recommended `__del__` should be OK here"""
+        self.terminate()
+
+
 # Standard libraries imports
 import argparse
 import datetime
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from multiprocessing import Pool, Queue, Manager, Lock
+from multiprocessing import Pool, Queue, Manager, Lock, Value
 import multiprocessing
 import numpy as np
 import os
@@ -51,6 +106,7 @@ from pydrake.geometry.render import DepthCameraProperties, MakeRenderEngineVtk, 
 
 import torch
 import torch.nn as nn
+import pycuda.driver as cuda
 from torchvision.transforms import transforms
 from torch.autograd import Variable
 import requests
@@ -132,7 +188,6 @@ class MugPipeline():
         self.folder_name = None
         self.all_poses = []
         self.all_probabilities = []
-        self.iteration_num = 0
         self.pose_bundle = None
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -147,7 +202,7 @@ class MugPipeline():
     def set_folder_name(self, folder_name):
         self.folder_name = folder_name
 
-    def create_image(self):
+    def create_image(self, iteration_num):
         """
         Create image based on initial poses
         """
@@ -325,7 +380,7 @@ class MugPipeline():
                 raise Exception('have not yet set the folder name')
 
             filename = 'robust_perception/optimization/{}/{:04d}_{}'.format(
-                self.folder_name, self.iteration_num, n_objects)
+                self.folder_name, iteration_num, n_objects)
             # time.sleep(0.5)
             rgb_and_label_image_visualizer.save_image(filename)
 
@@ -408,6 +463,9 @@ class MugPipeline():
         image_tensor = image_tensor.unsqueeze_(0)
 
         if torch.cuda.is_available():
+            torch.cuda.set_device(0)
+            print('curr_device', torch.cuda.current_device())
+            print(cuda.Device(0).name())
             image_tensor.cuda()
 
         # Turn the input into a Variable
@@ -452,13 +510,11 @@ class MugPipeline():
 
         return probabilities.data.numpy()[0]
 
-    def run_inference(self, poses):
+    def run_inference(self, iteration_num, poses):
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
         """
-        print('IN BEG OF RUN INFERENCE')
-
         path = os.path.join(self.package_directory,
             '../image_classification/mug_numeration_classifier.model')
         checkpoint = torch.load(path, map_location=torch.device('cpu'))
@@ -488,7 +544,7 @@ class MugPipeline():
             self.all_probabilities.append(np.nan)
             return 1.01
 
-        imagefile = self.create_image()
+        imagefile = self.create_image(iteration_num)
 
         # Run prediction function and obtain predicted class index
         probabilities = self.predict_image(model, imagefile)
@@ -497,40 +553,26 @@ class MugPipeline():
         probability = probabilities[self.num_mugs - 1]
 
         print('iteration: {}, probabilities: {}, probability: {}'.format(
-            self.iteration_num, probabilities, probability))
+            iteration_num, probabilities, probability))
         print('      {}'.format(self.initial_poses))
 
         f = open(self.metadata_filename, "a")
         f.write('\n----------\n')
         f.write('iteration: {}, probabilities: {}, probability: {}'.format(
-            self.iteration_num, probabilities, probability))
+            iteration_num, probabilities, probability))
         f.close()
 
         self.all_probabilities.append(probability)
 
-        if self.iteration_num % 100 == 0:
+        if iteration_num % 100 == 0:
             print('all_probabilities', self.all_probabilities)
 
-        print('RETURNED PROB')
         return probability
 
-    def set_iteration_num(self, iteration_num):
-        self.iteration_num = iteration_num
-        print('setting iter num: ', iteration_num)
 
 class Optimizer():
-    iteration_num = 0
-    lock = multiprocessing.Lock()
-
     def __init__(self, num_mugs, mug_initial_pose, mug_lower_bound, mug_upper_bound,
             max_evaluations):
-        """
-        
-        Parameters:
-        - self
-        - optimizer_type
-
-        """
         self.mug_initial_poses = []
         for _ in range(num_mugs):
             self.mug_initial_poses += mug_initial_pose
@@ -553,21 +595,12 @@ class Optimizer():
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
 
     @staticmethod
-    def run_inference(poses, mug_pipeline):
+    def run_inference(poses, iteration_num, mug_pipeline):
         """
         Wrapper for optimizer's entry point function
         """
-        # Optimizer.iteration_num_lock.acquire()
-        # lock.acquire()
-        Optimizer.lock.acquire()
-        print('initial iter num: ', Optimizer.iteration_num)
-        Optimizer.iteration_num += 1
-        print('final iteration_num: ', Optimizer.iteration_num)
-        mug_pipeline.set_iteration_num(Optimizer.iteration_num)
-        # Optimizer.iteration_num_lock.release()
-        Optimizer.lock.release()
-
-        prob = mug_pipeline.run_inference(poses)
+        print("iteration_num", iteration_num)
+        prob = mug_pipeline.run_inference(iteration_num, poses)
         return prob
 
     # def run_optimizer():
@@ -643,43 +676,17 @@ class Optimizer():
         es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0,
             {'bounds': [-1.0, 1.0], 'verb_disp': 1})
 
-        # ep = EvalParallel()
-        # iteration_num_lock = Lock()
-        
-        # while not es.stop():
-        #     X = es.ask()
-        #     ep(self.run_inference, X, args=(self.mug_pipeline, iteration_num_lock))
-        
-        # ep.terminate()
+        num_processes = 20
+        ep = EvalParallel3(self.run_inference, number_of_processes=num_processes)
 
-        ep = EvalParallel2(self.run_inference, number_of_processes=10)
-        # iteration_num_lock = Lock()
-        # iteration_num_lock = multiprocessing.Lock()
+        iter_num = 0
         
         while not es.stop():
+            lst = range(iter_num, iter_num + num_processes)
             X = es.ask()
-            ep(X, args=(self.mug_pipeline,)) #, iteration_num_lock))
-        
+            ep(X, lst=lst, args=(self.mug_pipeline,))
+            iter_num += num_processes
         ep.terminate()
-
-        # num_processes = 4
-        # ep = EvalParallel2(self.run_inference, num_processes)
-        # ep(self.mug_initial_poses, args=self.mug_pipeline)
-        # ep.terminate()
-
-        # with EvalParallel(20) as eval_all:
-        #     while not es.stop():
-        #         X = es.ask()
-        #         es.tell(X, eval_all(self.run_inference, X, args=self.mug_pipeline))
-        #         print('in here')
-
-        # with EvalParallel(20) as eval_all:
-        #     while not es.stop():
-        #         X = es.ask()
-        #         # es.tell(X, eval_all(self.run_inference, X))
-        #         fit = [self.run_inference(x, self.mug_pipeline) for x in X]
-        #         es.tell(X, fit)
-        #         print('in here')
 
     def run_scipy_fmin_slsqp(self):
         """
