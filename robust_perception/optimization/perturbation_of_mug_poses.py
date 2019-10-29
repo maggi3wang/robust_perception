@@ -1,6 +1,4 @@
-# """Wrapper for objective functions like noise, rotation, gluing args
-# """
-# from __future__ import absolute_import, division, print_function  #, unicode_literals, with_statement
+# TODO move this!!!
 from functools import partial
 import numpy as np
 from multiprocessing import Pool as ProcessingPool
@@ -56,6 +54,7 @@ class EvalParallel3(object):
 
 # Standard libraries imports
 import argparse
+import codecs
 import datetime
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -591,9 +590,13 @@ class Optimizer():
         self.max_evaluations = max_evaluations
 
         self.num_vars = 7 * self.num_mugs
+        self.num_processes = 20
 
         # TODO make this global
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
+
+        np.random.seed(int(codecs.encode(os.urandom(4), 'hex'), 32) & (2**32 - 1))
+        random.seed(os.urandom(4))
 
     @staticmethod
     def run_inference(poses, iteration_num, mug_pipeline):
@@ -657,7 +660,9 @@ class Optimizer():
     def run_pycma(self):
         """
             Covariance Matrix Evolution Strategy (CMA-ES)
+            Note that the bounds have to be rescaled later, for pycma only.
         """
+
         # self.mug_pipeline.set_folder_name("data_pycma")
         # es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0, 
         #     {'bounds': [-1.0, 1.0], 'verb_disp': 1})
@@ -668,27 +673,33 @@ class Optimizer():
 
         self.mug_pipeline.set_folder_name("data_pycma_new")
 
-        self.mug_initial_poses = \
-            [0.80318661, 0.23925861, -0.17375544, -0.51716113, -0.05577754, -0.00002082, 0.18672807, 
-            -0.82975143, -0.12051900, -0.03752475, -0.54367236, -0.05793993, -0.07058323, 0.13473190, 
-            0.60546342, -0.38073887, 0.65221595, 0.25113008, 0.04118729, 0.05237785, 0.16974618]
+        self.mug_initial_poses = []
+
+        for i in range(self.num_mugs):
+            self.mug_initial_poses += \
+                RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+
+        print(self.mug_initial_poses)
 
         es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0,
             {'bounds': [-1.0, 1.0], 'verb_disp': 1})
 
-        num_processes = 20
         iter_num = 0
 
         while not es.stop():
             # TODO there must be a way to not run out of CUDA memory
             # and move this outside of the while...
-            ep = EvalParallel3(self.run_inference, number_of_processes=num_processes)
-            lst = range(iter_num, iter_num + num_processes)
+            ep = EvalParallel3(self.run_inference, number_of_processes=self.num_processes)
+            lst = range(iter_num, iter_num + self.num_processes)
             X = es.ask()
             ep(X, lst=lst, args=(self.mug_pipeline,))
-            iter_num += num_processes
+            iter_num += self.num_processes
             torch.cuda.empty_cache()
             ep.terminate()
+
+        es.result_pretty()
+        cma.plot()
 
     def run_scipy_fmin_slsqp(self):
         """
@@ -696,14 +707,11 @@ class Optimizer():
         """
         self.mug_pipeline.set_folder_name("data_scipy_fmin_slsqp")
 
-        mug_initials = \
-            [0.80318661, 0.23925861, -0.17375544, -0.51716113, -0.05577754, -0.00002082, 0.18672807, 
-            -0.82975143, -0.12051900, -0.03752475, -0.54367236, -0.05793993, -0.07058323, 0.13473190, 
-            0.60546342, -0.38073887, 0.65221595, 0.25113008, 0.04118729, 0.05237785, 0.16974618]
-
-        ##### FIGURE OUT WHY setting this gives a configuration error
-        # this should work?
-        # mug_initial = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        mug_initial_poses = []
+        for i in range(self.num_mugs):
+            mug_initial_poses += \
+                RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
 
         mug_bound = [(-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-0.1, 0.1), (-0.1, 0.1), (0.1, 0.2)]
 
@@ -711,12 +719,18 @@ class Optimizer():
         for i in range(0, 3):
             mug_bounds += mug_bound
 
-        exit_mode = optimize.fmin_slsqp(self.mug_pipeline.run_inference, mug_initials,
+        exit_mode = optimize.fmin_slsqp(self.mug_pipeline.run_inference, mug_initial_poses,
             bounds=mug_bounds, full_output=True, iter=self.max_evaluations)
 
         print(exit_mode)
 
-    def run_scipy_nelder_mead(self, num_workers):
+    @staticmethod
+    def run_nelder_mead_inference(mug_initial_poses, iteration_num, mug_pipeline):
+        optimize.minimize(mug_pipeline.run_inference, mug_initial_poses,
+            bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
+            options={'maxiter':1000, 'disp': True})
+
+    def run_scipy_nelder_mead(self):
         """
         For local search methods, we want to create n parallel processes with random initial poses.
         Each time the process finds a counter example, kill the current process and spawn a
@@ -725,29 +739,25 @@ class Optimizer():
         
         start_time = time.time()
 
-        num_workers = 20
-        pool = Pool(num_workers)
-        manager = Manager()
+        self.mug_pipeline.set_folder_name("data_scipy_nelder_mead")
+        pool = Pool(self.num_processes)
 
-        output_queue = manager.Queue()
-        start_iteration_num = 6988
-        end_iteration_num = 10000
+        start_iteration_num = 0
+        end_iteration_num = 1000
         total_num_iterations = end_iteration_num - start_iteration_num
         assert(total_num_iterations > 0)
 
-        result = pool.map(GenerationWorker(output_queue=output_queue), range(start_iteration_num, end_iteration_num))
-
-
-        self.mug_pipeline.set_folder_name("data_scipy_nelder_mead")
+        lst = range(start_iteration_num, end_iteration_num)
 
         mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
         mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
 
         # Randomly initialize mug
-        pose = RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz()
-        position = [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1),
-                    np.random.uniform(0.1, 0.2)]
-        mug_initials = pose + position
+        mug_initial_poses = []
+        for i in range(self.num_mugs):
+            mug_initial_poses += \
+                RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
 
         mug_lower_bounds = []
         mug_upper_bounds = []
@@ -756,9 +766,10 @@ class Optimizer():
             mug_lower_bounds += mug_lower_bound
             mug_upper_bounds += mug_upper_bound
 
-        optimize.minimize(self.mug_pipeline.run_inference, mug_initials,
-            bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
-            options={'maxiter':1000, 'disp': True})
+        for i in range(0, len(lst)):
+            pool.apply_async(self.run_nelder_mead_inference, args=(mug_initial_poses, lst[i], self.mug_pipeline,))
+
+        end_time = time.time()
 
 def main():
     mug_initial_pose = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -777,16 +788,16 @@ def main():
     # Run all the optimizers
     # optimizer.plot_graphs(optimizer.run_nevergrad())
 
-    optimizer.run_pycma()
-    optimizer.plot_graphs()
+    # optimizer.run_pycma()
+    # optimizer.plot_graphs()
 
     ## Local optimizers
 
     # optimizer.run_scipy_fmin_slsqp()
     # optimizer.plot_graphs()
 
-    # optimizer.run_scipy_nelder_mead(num_workers=30)
-    # optimizer.plot_graphs()
+    optimizer.run_scipy_nelder_mead()
+    optimizer.plot_graphs()
 
 if __name__ == "__main__":
     main()
