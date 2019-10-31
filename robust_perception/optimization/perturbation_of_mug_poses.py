@@ -56,6 +56,7 @@ class EvalParallel3(object):
 import argparse
 import codecs
 import datetime
+from itertools import repeat
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from multiprocessing import Pool, Queue, Manager, Lock, Value
@@ -512,11 +513,14 @@ class MugPipeline():
 
         return probabilities.data.numpy()[0]
 
-    def run_inference(self, iteration_num, poses):
+    def run_inference(self, poses, iteration_num):  ## NOTE I CHANGED THE ORDER need to change for pycma
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
         """
+        # print('iteration_num', iteration_num)
+        # print('poses', poses)
+
         path = os.path.join(self.package_directory,
             '../image_classification/mug_numeration_classifier.model')
         checkpoint = torch.load(path, map_location=torch.device('cpu'))
@@ -725,8 +729,29 @@ class Optimizer():
         print(exit_mode)
 
     @staticmethod
-    def run_nelder_mead_inference(mug_initial_poses, iteration_num, mug_pipeline):
-        optimize.minimize(mug_pipeline.run_inference, mug_initial_poses,
+    def run_nelder_mead_process(iteration_num, mug_pipeline):
+        # Randomly initialize mug
+        mug_initial_poses = []
+        num_mugs = 3
+        for i in range(num_mugs):
+            mug_initial_poses += \
+                RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+
+        mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
+        mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
+
+        mug_lower_bounds = []
+        mug_upper_bounds = []
+
+        for i in range(0, 3):
+            mug_lower_bounds += mug_lower_bound
+            mug_upper_bounds += mug_upper_bound
+
+        # print('mug_initial_poses', mug_initial_poses)
+        print('iteration_num', iteration_num)
+
+        optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, args=(iteration_num,),
             bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
             options={'maxiter':1000, 'disp': True})
 
@@ -742,34 +767,44 @@ class Optimizer():
         self.mug_pipeline.set_folder_name("data_scipy_nelder_mead")
         pool = Pool(self.num_processes)
 
-        start_iteration_num = 0
-        end_iteration_num = 1000
-        total_num_iterations = end_iteration_num - start_iteration_num
-        assert(total_num_iterations > 0)
+        # lst = range(start_iteration_num, end_iteration_num)
 
-        lst = range(start_iteration_num, end_iteration_num)
+        num_iterations = 3
+        # iteration_nums = list(range(num_iterations))
+        iteration_nums = [1, 2, 3]
 
-        mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
-        mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
+        for i, mp, nm in zip(iteration_nums, repeat(self.mug_pipeline), repeat(self.num_mugs)):
+            print(i, mp, nm)
 
-        # Randomly initialize mug
-        mug_initial_poses = []
-        for i in range(self.num_mugs):
-            mug_initial_poses += \
-                RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
-                [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+        result = pool.starmap(self.run_nelder_mead_process, zip(iteration_nums, [self.mug_pipeline, self.mug_pipeline, self.mug_pipeline]))
+        pool.terminate()
+        pool.join()
 
-        mug_lower_bounds = []
-        mug_upper_bounds = []
+        # all_mug_poses = []
+        # for i in range(self.num_processes):
+        #     all_mug_poses 
 
-        for i in range(0, 3):
-            mug_lower_bounds += mug_lower_bound
-            mug_upper_bounds += mug_upper_bound
+        # iter_num = 0
 
-        for i in range(0, len(lst)):
-            pool.apply_async(self.run_nelder_mead_inference, args=(mug_initial_poses, lst[i], self.mug_pipeline,))
+        # while iter_num < 10: # to change
+        #     for i in range(iter_num, iter_num + self.num_processes):
+        #         # print('i', i)
+        #         jobs = [pool.apply_async(self.run_nelder_mead_process,
+        #             (mug_initial_poses, i, self.mug_pipeline, mug_lower_bounds, mug_upper_bounds))]
+        #     iter_num += self.num_processes
+        #     # print('new iter_num', iter_num)
+
+        # # [job.get(timeout) for job in jobs]
+        # for job in jobs:
+        #     job.get()
+
+        # jobs = [self.pool.apply_async(self.run_nelder_mead_process, (x,iter_num) + args)
+        #                 for x, iter_num in zip(solutions, lst)]
 
         end_time = time.time()
+
+        print('took {} time for {} iterations, avg of {} sec/iteration'.format(
+            end_time - start_time, num_iterations, float(end_time - start_time)/num_iterations))
 
 def main():
     mug_initial_pose = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -797,7 +832,7 @@ def main():
     # optimizer.plot_graphs()
 
     optimizer.run_scipy_nelder_mead()
-    optimizer.plot_graphs()
+    # optimizer.plot_graphs()
 
 if __name__ == "__main__":
     main()
