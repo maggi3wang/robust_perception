@@ -194,6 +194,8 @@ class MugPipeline():
 
         self.metadata_filename = None
 
+        self.iteration_num = 0
+
         if torch.cuda.is_available():
             cuda.init()
             torch.cuda.set_device(0)
@@ -209,7 +211,7 @@ class MugPipeline():
     def set_folder_name(self, folder_name):
         self.folder_name = folder_name
 
-    def create_image(self, iteration_num):
+    def create_image(self, iteration_num, process_num=None):
         """
         Create image based on initial poses
         """
@@ -388,6 +390,12 @@ class MugPipeline():
 
             filename = 'robust_perception/optimization/{}/{:04d}_{}'.format(
                 self.folder_name, iteration_num, n_objects)
+
+            if process_num is not None:
+                # TODO change this to take 2 digits
+                filename = 'robust_perception/optimization/{}/{:02d}/{:04d}_{}'.format(
+                    self.folder_name, process_num, iteration_num, n_objects)                
+
             # time.sleep(0.5)
             rgb_and_label_image_visualizer.save_image(filename)
 
@@ -497,7 +505,10 @@ class MugPipeline():
 
         # print('there {} {} mug{}'.format(word, classes[index], s))
 
+        is_correct = True
+
         if classes[index] != self.num_mugs:
+            is_correct = False
             print('predicted {} mugs - WRONG, the actual number of mugs is {}!'.format(
                 classes[index], self.num_mugs))
 
@@ -511,7 +522,7 @@ class MugPipeline():
         # else:
         #     print('this is correct')
 
-        return probabilities.data.numpy()[0]
+        return probabilities.data.numpy()[0], is_correct
 
     def run_inference(self, poses, iteration_num):  ## NOTE I CHANGED THE ORDER need to change for pycma
         """
@@ -520,6 +531,13 @@ class MugPipeline():
         """
         # print('iteration_num', iteration_num)
         # print('poses', poses)
+
+        # change this horrendous way
+        process_num = iteration_num
+        if 'nelder_mead' in self.folder_name:
+            iteration_num = self.iteration_num
+
+        print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num))
 
         path = os.path.join(self.package_directory,
             '../image_classification/mug_numeration_classifier.model')
@@ -548,10 +566,14 @@ class MugPipeline():
             self.all_probabilities.append(np.nan)
             return 1.01
 
-        imagefile = self.create_image(iteration_num)
+        # TODO change this, maybe just take in process_num regardless
+        if 'nelder_mead' in self.folder_name:
+            imagefile = self.create_image(iteration_num, process_num)
+        else:
+            imagefile = self.create_image(iteration_num)
 
         # Run prediction function and obtain predicted class index
-        probabilities = self.predict_image(model, imagefile)
+        probabilities, is_correct = self.predict_image(model, imagefile)
 
         # Return probabilities
         probability = probabilities[self.num_mugs - 1]
@@ -570,6 +592,14 @@ class MugPipeline():
 
         if iteration_num % 100 == 0:
             print('all_probabilities', self.all_probabilities)
+
+        if 'nelder_mead' in self.folder_name:
+            self.iteration_num += 1
+            print('is_correct', is_correct)
+
+            if not is_correct:
+               multiprocessing.current_process().terminate() 
+               print("TERMINATED PROCEESS ", process_num)
 
         return probability
 
@@ -594,7 +624,7 @@ class Optimizer():
         self.max_evaluations = max_evaluations
 
         self.num_vars = 7 * self.num_mugs
-        self.num_processes = 20
+        self.num_processes = 3
 
         # TODO make this global
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
@@ -729,7 +759,7 @@ class Optimizer():
         print(exit_mode)
 
     @staticmethod
-    def run_nelder_mead_process(iteration_num, mug_pipeline):
+    def run_nelder_mead_process(process_num, mug_pipeline, num_mugs):
         # Randomly initialize mug
         mug_initial_poses = []
         num_mugs = 3
@@ -749,9 +779,16 @@ class Optimizer():
             mug_upper_bounds += mug_upper_bound
 
         # print('mug_initial_poses', mug_initial_poses)
-        print('iteration_num', iteration_num)
+        # print('iteration_num', iteration_num)
+        print('process_num', process_num)
 
-        optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, args=(iteration_num,),
+        folder = '{}/{}/{:02d}'.format(os.path.dirname(os.path.abspath(__file__)), '/data_scipy_nelder_mead/', process_num)
+
+        print('folder', folder)
+        if not os.path.exists(folder):
+            os.mkdir(folder)
+
+        optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, args=(process_num,),
             bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
             options={'maxiter':1000, 'disp': True})
 
@@ -767,16 +804,8 @@ class Optimizer():
         self.mug_pipeline.set_folder_name("data_scipy_nelder_mead")
         pool = Pool(self.num_processes)
 
-        # lst = range(start_iteration_num, end_iteration_num)
-
-        num_iterations = 3
-        # iteration_nums = list(range(num_iterations))
-        iteration_nums = [1, 2, 3]
-
-        for i, mp, nm in zip(iteration_nums, repeat(self.mug_pipeline), repeat(self.num_mugs)):
-            print(i, mp, nm)
-
-        result = pool.starmap(self.run_nelder_mead_process, zip(iteration_nums, [self.mug_pipeline, self.mug_pipeline, self.mug_pipeline]))
+        result = pool.starmap(self.run_nelder_mead_process,
+            zip(range(self.num_processes), repeat(self.mug_pipeline), repeat(self.num_mugs)))
         pool.terminate()
         pool.join()
 
