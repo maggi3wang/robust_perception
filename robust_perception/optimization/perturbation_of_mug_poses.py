@@ -127,6 +127,9 @@ from cma.fitness_transformations import EvalParallel2
 from ..image_classification.simple_net import SimpleNet
 
 
+class FoundCounterexample(Exception):
+    pass
+
 class RgbAndLabelImageVisualizer(LeafSystem):
     def __init__(self, draw_timestep=0.033333):
         LeafSystem.__init__(self)
@@ -598,13 +601,17 @@ class MugPipeline():
             print('is_correct', is_correct)
 
             if not is_correct:
-               multiprocessing.current_process().terminate() 
-               print("TERMINATED PROCEESS ", process_num)
+                print('raising FoundCounterexample exception')
+                raise FoundCounterexample
+               # multiprocessing.current_process().terminate() 
+               # print("TERMINATED PROCEESS ", process_num)
 
         return probability
 
 
 class Optimizer():
+    highest_process_num = 10
+
     def __init__(self, num_mugs, mug_initial_pose, mug_lower_bound, mug_upper_bound,
             max_evaluations):
         self.mug_initial_poses = []
@@ -624,7 +631,7 @@ class Optimizer():
         self.max_evaluations = max_evaluations
 
         self.num_vars = 7 * self.num_mugs
-        self.num_processes = 3
+        self.num_processes = Optimizer.highest_process_num
 
         # TODO make this global
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
@@ -780,17 +787,31 @@ class Optimizer():
 
         # print('mug_initial_poses', mug_initial_poses)
         # print('iteration_num', iteration_num)
-        print('process_num', process_num)
 
-        folder = '{}/{}/{:02d}'.format(os.path.dirname(os.path.abspath(__file__)), '/data_scipy_nelder_mead/', process_num)
+        while True:
+            try:
+                print('process_num', process_num)
 
-        print('folder', folder)
-        if not os.path.exists(folder):
-            os.mkdir(folder)
+                folder = '{}/{}/{:02d}'.format(os.path.dirname(os.path.abspath(__file__)),
+                    '/data_scipy_nelder_mead/', process_num)
 
-        optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, args=(process_num,),
-            bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
-            options={'maxiter':1000, 'disp': True})
+                print('folder', folder)
+                if not os.path.exists(folder):
+                    os.mkdir(folder)
+
+                optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, args=(process_num,),
+                    bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
+                    options={'maxiter':1000, 'disp': True})
+            except FoundCounterexample:
+                # After we find a counterex, get new mug initial pose and restart optimizer
+                mug_initial_poses = []
+                for i in range(num_mugs):
+                    mug_initial_poses += \
+                        RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                        [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+                # TODO put this in a lock
+                Optimizer.highest_process_num += 1
+                process_num = Optimizer.highest_process_num
 
     def run_scipy_nelder_mead(self):
         """
