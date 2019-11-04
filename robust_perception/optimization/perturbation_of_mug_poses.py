@@ -535,8 +535,8 @@ class MugPipeline():
         It must be a function, not an instancemethod, to work with multiprocessing
         """
 
-        print('iteration_num', iteration_num)
-        print('poses', poses)
+        # print('iteration_num', iteration_num)
+        # print('poses', poses)
 
         # change this horrendous way
         process_num = iteration_num
@@ -598,7 +598,7 @@ class MugPipeline():
         all_probabilities.append(probability)
 
         # if iteration_num % 100 == 0:
-        print('all_probabilities', all_probabilities)
+        #     print('all_probabilities', all_probabilities)
 
         if 'nelder_mead' in self.folder_name:
             self.iteration_num += 1
@@ -607,17 +607,15 @@ class MugPipeline():
             if not is_correct:
                 print('raising FoundCounterexample exception')
                 raise FoundCounterexample
-               # multiprocessing.current_process().terminate() 
-               # print("TERMINATED PROCEESS ", process_num)
 
         return probability
 
 
 class Optimizer():
-    highest_process_num = 10
+    highest_process_num = 20
 
     def __init__(self, num_mugs, mug_initial_pose, mug_lower_bound, mug_upper_bound,
-            max_evaluations):
+            max_evaluations, max_time):
         self.mug_initial_poses = []
         for _ in range(num_mugs):
             self.mug_initial_poses += mug_initial_pose
@@ -633,6 +631,7 @@ class Optimizer():
         self.mug_pipeline = MugPipeline(num_mugs=num_mugs, initial_poses=self.mug_initial_poses)
         self.num_mugs = num_mugs
         self.max_evaluations = max_evaluations
+        self.max_time = max_time         # [s]
 
         self.num_vars = 7 * self.num_mugs
         self.num_processes = Optimizer.highest_process_num
@@ -665,7 +664,8 @@ class Optimizer():
         ax.plot(self.all_probabilities)
         ax.set(xlabel='Iteration', ylabel='Probability')
         ax.set_xlim(xmin=0, xmax=len(self.all_probabilities))
-        ax.set_ylim(ymin=min(self.all_probabilities), ymax=1.0)
+        # ax.set_ylim(ymin=min(self.all_probabilities), ymax=1.0)
+        ax.set_ylim(ymin=0.0, ymax=1.0)
         ax.grid()
         fig2.savefig(os.path.join(self.package_directory, 'probability_plot.png'))
         plt.show()
@@ -731,84 +731,32 @@ class Optimizer():
         es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0,
             {'bounds': [-1.0, 1.0], 'verb_disp': 1})
 
-        # logger = cma.CMADataLogger().register(es)
-
         iter_num = 0
 
         start_time = time.time()
-        max_time = 30.0
-
-        times_up = False
-        elapsed_time = time.time()
 
         manager = Manager()
         self.all_probabilities = manager.list()
 
-        # while not es.stop() and not times_up:
-        #     # This will allow the program to run a bit longer than the max time, but close enough.
-        #     # Real way to do this is through another multiprocessing call
-        #     elapsed_time = time.time() - start_time
-        #     times_up = elapsed_time > max_time # 60.0 * 60.0 * 5.0   # 5 hours
-
-        #     if times_up:
-        #         print('ran for {} minutes! total number of iterations is {}, with {} images/sec'.format(
-        #             elapsed_time/60.0, iter_num, iter_num/elapsed_time))
-        #         break
-
-        #     # TODO there must be a way to not run out of CUDA memory
-        #     # and move this outside of the while...
-
-        #     # add timeout 
-        #     ep = EvalParallel3(self.run_inference, number_of_processes=self.num_processes)
-        #     lst = range(iter_num, iter_num + self.num_processes)
-        #     X = es.ask()
-        #     ep(X, lst=lst, args=(self.mug_pipeline, self.all_probabilities))
-        #     iter_num += self.num_processes
-        #     torch.cuda.empty_cache()
-        #     ep.terminate()
-
-        #     # logger.add()
-
-
-        while not es.stop(): # and not times_up:
-            # This will allow the program to run a bit longer than the max time, but close enough.
-            # Real way to do this is through another multiprocessing call
-            # elapsed_time = time.time() - start_time
-            # times_up = elapsed_time > max_time # 60.0 * 60.0 * 5.0   # 5 hours
-
-            # if times_up:
-            #     print('ran for {} minutes! total number of iterations is {}, with {} images/sec'.format(
-            #         elapsed_time/60.0, iter_num, iter_num/elapsed_time))
-            #     break
-
-            # TODO there must be a way to not run out of CUDA memory
-            # and move this outside of the while...
-
-            # add timeout 
+        while not es.stop():
             try:
                 ep = EvalParallel3(self.run_inference, number_of_processes=self.num_processes)
                 lst = range(iter_num, iter_num + self.num_processes)
                 X = es.ask()
                 ep(X, lst=lst, args=(self.mug_pipeline, self.all_probabilities),
-                    timeout=max_time - (time.time() - start_time))
+                    timeout=(self.max_time - (time.time() - start_time)))
             except multiprocessing.context.TimeoutError:
-                print('timed out')
-
                 elapsed_time = time.time() - start_time
-                print('ran for {} minutes! total number of iterations is {}, with {} images/sec'.format(
-                    elapsed_time/60.0, iter_num, iter_num/elapsed_time))
+                print('ran for {} minutes! total number of iterations is {}, with {} sec/image'.format(
+                    elapsed_time/60.0, iter_num, elapsed_time/iter_num))
                 break
 
             iter_num += self.num_processes
             torch.cuda.empty_cache()
             ep.terminate()
 
-            # logger.add()
-
         print('probabilities:', self.all_probabilities)
         es.result_pretty()
-        # logger.plot()
-        # cma.plot()
 
     def run_scipy_fmin_slsqp(self):
         """
@@ -928,8 +876,11 @@ def main():
     mug_initial_pose = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
     mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
+    # max_sec = 60.0 * 60.0 * 5.0
+    max_sec = 60.0
     optimizer = Optimizer(num_mugs=3, mug_initial_pose=mug_initial_pose,
-        mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound, max_evaluations=50000)
+        mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound, max_evaluations=50000,
+        max_time=max_sec)
 
     multiprocessing.set_start_method('spawn')
 
