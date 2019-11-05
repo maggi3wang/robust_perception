@@ -525,8 +525,8 @@ class MugPipeline():
 
         return probabilities.data.numpy()[0], is_correct
 
-    def run_inference(self, poses, iteration_num, all_probabilities,
-            total_iterations=None, total_iterations_lock=None):
+    def run_inference(self, poses, iteration_num, all_probabilities=None,
+            total_iterations=None, total_iterations_lock=None, file_q=None):
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
@@ -596,6 +596,9 @@ class MugPipeline():
 
         with total_iterations_lock:
             total_iterations.value += 1
+
+        res = '{}, {}, {},'.format(process_num, iteration_num, probability)
+        file_q.put(res)
 
         if 'nelder_mead' in self.folder_name:
             self.iteration_num += 1
@@ -784,7 +787,7 @@ class Optimizer():
 
     @staticmethod
     def run_nelder_mead_process(process_num, mug_pipeline, num_mugs, all_probabilities,
-            total_iterations, total_iterations_lock):
+            total_iterations, total_iterations_lock, file_q):
         # Randomly initialize mug
         mug_initial_poses = []
         num_mugs = 3
@@ -818,7 +821,7 @@ class Optimizer():
                     os.mkdir(folder)
 
                 optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, 
-                    args=(process_num, all_probabilities, total_iterations, total_iterations_lock),
+                    args=(process_num, all_probabilities, total_iterations, total_iterations_lock, file_q),
                     bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
                     options={'disp': True})
             except FoundCounterexample:
@@ -830,7 +833,18 @@ class Optimizer():
                         [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
                 # TODO put this in a lock
                 Optimizer.highest_process_num += 1
-                process_num = Optimizer.highest_process_num
+                process_num = Optimizer.highest_process_num - 1
+
+    @staticmethod
+    def listener(q, filename):
+        with open(filename, 'w') as f:
+            f.write('process_num, iter_num, probability\n')
+            while 1:
+                m = q.get()
+                if m == 'kill':
+                    break
+                f.write(str(m) + '\n')
+                f.flush()
 
     def run_scipy_nelder_mead(self):
         """
@@ -846,20 +860,29 @@ class Optimizer():
         self.total_iterations = manager.Value('d', 0)
         total_iterations_lock = manager.Lock()
 
-        self.mug_pipeline.set_folder_name("data_scipy_nelder_mead")
-        pool = Pool(self.num_processes)
+        file_q = manager.Queue()
+
+        folder_name = "data_scipy_nelder_mead"
+        self.mug_pipeline.set_folder_name(folder_name)
+        pool = Pool(self.num_processes + 1)
+
+        filename = 'robust_perception/optimization/{}/results.csv'.format(folder_name)
+        watcher = pool.apply_async(self.listener, (file_q, filename))
+        # print(watcher.get())
 
         try:
-            result = func_timeout(self.max_sec, pool.starmap,
+            result = func_timeout(self.max_time, pool.starmap,
                 args=(self.run_nelder_mead_process,
                 zip(range(self.num_processes), repeat(self.mug_pipeline), repeat(self.num_mugs),
-                    repeat(self.all_probabilities), repeat(self.total_iterations), repeat(total_iterations_lock))))
+                    repeat(self.all_probabilities), repeat(self.total_iterations), repeat(total_iterations_lock),
+                    repeat(file_q))))
 
         except FunctionTimedOut:
             elapsed_time = time.time() - start_time
             print('ran for {} minutes! total number of iterations is {}, with {} sec/image'.format(
                 elapsed_time/60.0, self.total_iterations.value, elapsed_time/self.total_iterations.value))
 
+            file_q.put('kill')
             pool.terminate()
             pool.join()
 
@@ -873,7 +896,8 @@ def main():
     mug_initial_pose = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
     mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
-    max_sec = 60.0 * 60.0 * 5.0
+    # max_sec = 60.0 * 60.0 * 5.0
+    max_sec = 30.0
     optimizer = Optimizer(num_mugs=3, mug_initial_pose=mug_initial_pose,
         mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound, max_evaluations=50000,
         max_time=max_sec)
