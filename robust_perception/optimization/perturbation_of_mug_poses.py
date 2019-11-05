@@ -69,6 +69,8 @@ import yaml
 import sys
 
 # pydrake imports
+from func_timeout import func_timeout, FunctionTimedOut
+
 import pydrake
 from pydrake.common import FindResourceOrThrow
 from pydrake.common.eigen_geometry import Quaternion, AngleAxis, Isometry3
@@ -203,8 +205,7 @@ class MugPipeline():
         if torch.cuda.is_available():
             cuda.init()
             torch.cuda.set_device(0)
-            print('curr_device', torch.cuda.current_device())
-            print(cuda.Device(0).name())
+            print(cuda.Device(torch.cuda.current_device()).name())
 
     def get_all_poses(self):
         return self.all_poses
@@ -393,12 +394,11 @@ class MugPipeline():
             if self.folder_name is None:
                 raise Exception('have not yet set the folder name')
 
-            filename = 'robust_perception/optimization/{}/{:04d}_{}'.format(
+            filename = 'robust_perception/optimization/{}/{:05d}_{}'.format(
                 self.folder_name, iteration_num, n_objects)
 
             if process_num is not None:
-                # TODO change this to take 2 digits
-                filename = 'robust_perception/optimization/{}/{:02d}/{:04d}_{}'.format(
+                filename = 'robust_perception/optimization/{}/{:03d}/{:05d}_{}'.format(
                     self.folder_name, process_num, iteration_num, n_objects)                
 
             # time.sleep(0.5)
@@ -523,13 +523,10 @@ class MugPipeline():
                 classes[index], self.num_mugs))
             f.close()
 
-            # TODO in this case, don't just use the highest -- it needs to be the right mug
-        # else:
-        #     print('this is correct')
-
         return probabilities.data.numpy()[0], is_correct
 
-    def run_inference(self, poses, iteration_num, all_probabilities):
+    def run_inference(self, poses, iteration_num, all_probabilities,
+            total_iterations=None, total_iterations_lock=None):
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
@@ -597,16 +594,17 @@ class MugPipeline():
         # global all_probabilities
         all_probabilities.append(probability)
 
-        # if iteration_num % 100 == 0:
-        #     print('all_probabilities', all_probabilities)
+        with total_iterations_lock:
+            total_iterations.value += 1
 
         if 'nelder_mead' in self.folder_name:
             self.iteration_num += 1
-            print('is_correct', is_correct)
 
             if not is_correct:
                 print('raising FoundCounterexample exception')
                 raise FoundCounterexample
+
+        sys.stdout.flush()
 
         return probability
 
@@ -734,6 +732,7 @@ class Optimizer():
         iter_num = 0
 
         start_time = time.time()
+        elapsed_time = 0
 
         manager = Manager()
         self.all_probabilities = manager.list()
@@ -743,10 +742,10 @@ class Optimizer():
                 ep = EvalParallel3(self.run_inference, number_of_processes=self.num_processes)
                 lst = range(iter_num, iter_num + self.num_processes)
                 X = es.ask()
-                ep(X, lst=lst, args=(self.mug_pipeline, self.all_probabilities),
-                    timeout=(self.max_time - (time.time() - start_time)))
-            except multiprocessing.context.TimeoutError:
                 elapsed_time = time.time() - start_time
+                ep(X, lst=lst, args=(self.mug_pipeline, self.all_probabilities),
+                    timeout=(self.max_time - elapsed_time))
+            except multiprocessing.context.TimeoutError:
                 print('ran for {} minutes! total number of iterations is {}, with {} sec/image'.format(
                     elapsed_time/60.0, iter_num, elapsed_time/iter_num))
                 break
@@ -757,6 +756,8 @@ class Optimizer():
 
         print('probabilities:', self.all_probabilities)
         es.result_pretty()
+
+        sys.stdout.flush()
 
     def run_scipy_fmin_slsqp(self):
         """
@@ -782,7 +783,8 @@ class Optimizer():
         print(exit_mode)
 
     @staticmethod
-    def run_nelder_mead_process(process_num, mug_pipeline, num_mugs):
+    def run_nelder_mead_process(process_num, mug_pipeline, num_mugs, all_probabilities,
+            total_iterations, total_iterations_lock):
         # Randomly initialize mug
         mug_initial_poses = []
         num_mugs = 3
@@ -806,18 +808,19 @@ class Optimizer():
 
         while True:
             try:
-                print('process_num', process_num)
+                # print('process_num', process_num)
 
-                folder = '{}/{}/{:02d}'.format(os.path.dirname(os.path.abspath(__file__)),
-                    '/data_scipy_nelder_mead/', process_num)
+                folder = '{}/{}/{:03d}'.format(os.path.dirname(os.path.abspath(__file__)),
+                    'data_scipy_nelder_mead', process_num)
 
-                print('folder', folder)
+                # print('folder', folder)
                 if not os.path.exists(folder):
                     os.mkdir(folder)
 
-                optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, args=(process_num,),
+                optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, 
+                    args=(process_num, all_probabilities, total_iterations, total_iterations_lock),
                     bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
-                    options={'maxiter':1000, 'disp': True})
+                    options={'disp': True})
             except FoundCounterexample:
                 # After we find a counterex, get new mug initial pose and restart optimizer
                 mug_initial_poses = []
@@ -838,46 +841,39 @@ class Optimizer():
         
         start_time = time.time()
 
+        manager = Manager()
+        self.all_probabilities = manager.list()
+        self.total_iterations = manager.Value('d', 0)
+        total_iterations_lock = manager.Lock()
+
         self.mug_pipeline.set_folder_name("data_scipy_nelder_mead")
         pool = Pool(self.num_processes)
 
-        result = pool.starmap(self.run_nelder_mead_process,
-            zip(range(self.num_processes), repeat(self.mug_pipeline), repeat(self.num_mugs)))
-        pool.terminate()
-        pool.join()
+        try:
+            result = func_timeout(self.max_sec, pool.starmap,
+                args=(self.run_nelder_mead_process,
+                zip(range(self.num_processes), repeat(self.mug_pipeline), repeat(self.num_mugs),
+                    repeat(self.all_probabilities), repeat(self.total_iterations), repeat(total_iterations_lock))))
 
-        # all_mug_poses = []
-        # for i in range(self.num_processes):
-        #     all_mug_poses 
+        except FunctionTimedOut:
+            elapsed_time = time.time() - start_time
+            print('ran for {} minutes! total number of iterations is {}, with {} sec/image'.format(
+                elapsed_time/60.0, self.total_iterations.value, elapsed_time/self.total_iterations.value))
 
-        # iter_num = 0
-
-        # while iter_num < 10: # to change
-        #     for i in range(iter_num, iter_num + self.num_processes):
-        #         # print('i', i)
-        #         jobs = [pool.apply_async(self.run_nelder_mead_process,
-        #             (mug_initial_poses, i, self.mug_pipeline, mug_lower_bounds, mug_upper_bounds))]
-        #     iter_num += self.num_processes
-        #     # print('new iter_num', iter_num)
-
-        # # [job.get(timeout) for job in jobs]
-        # for job in jobs:
-        #     job.get()
-
-        # jobs = [self.pool.apply_async(self.run_nelder_mead_process, (x,iter_num) + args)
-        #                 for x, iter_num in zip(solutions, lst)]
+            pool.terminate()
+            pool.join()
 
         end_time = time.time()
 
-        print('took {} time for {} iterations, avg of {} sec/iteration'.format(
-            end_time - start_time, num_iterations, float(end_time - start_time)/num_iterations))
+        print('probabilities:', self.all_probabilities)
+
+        sys.stdout.flush()
 
 def main():
     mug_initial_pose = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
     mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
-    # max_sec = 60.0 * 60.0 * 5.0
-    max_sec = 60.0
+    max_sec = 60.0 * 60.0 * 5.0
     optimizer = Optimizer(num_mugs=3, mug_initial_pose=mug_initial_pose,
         mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound, max_evaluations=50000,
         max_time=max_sec)
@@ -892,16 +888,16 @@ def main():
     # Run all the optimizers
     # optimizer.plot_graphs(optimizer.run_nevergrad())
 
-    optimizer.run_pycma()
-    optimizer.plot_graphs()
+    # optimizer.run_pycma()
+    # optimizer.plot_graphs()
 
     ## Local optimizers
 
     # optimizer.run_scipy_fmin_slsqp()
     # optimizer.plot_graphs()
 
-    # optimizer.run_scipy_nelder_mead()
-    # optimizer.plot_graphs()
+    optimizer.run_scipy_nelder_mead()
+    optimizer.plot_graphs()
 
 if __name__ == "__main__":
     main()
