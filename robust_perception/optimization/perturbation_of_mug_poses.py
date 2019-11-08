@@ -646,6 +646,17 @@ class Optimizer():
         random.seed(os.urandom(4))
 
     @staticmethod
+    def listener(q, filename):
+        with open(filename, 'w') as f:
+            f.write('process_num, iter_num, probability\n')
+            while 1:
+                m = q.get()
+                if m == 'kill':
+                    break
+                f.write(str(m) + '\n')
+                f.flush()
+
+    @staticmethod
     def run_inference(poses, iteration_num, mug_pipeline, all_probabilities):
         """
         Wrapper for optimizer's entry point function
@@ -835,17 +846,6 @@ class Optimizer():
                 Optimizer.highest_process_num += 1
                 process_num = Optimizer.highest_process_num - 1
 
-    @staticmethod
-    def listener(q, filename):
-        with open(filename, 'w') as f:
-            f.write('process_num, iter_num, probability\n')
-            while 1:
-                m = q.get()
-                if m == 'kill':
-                    break
-                f.write(str(m) + '\n')
-                f.flush()
-
     def run_scipy_nelder_mead(self):
         """
         For local search methods, we want to create n parallel processes with random initial poses.
@@ -868,7 +868,6 @@ class Optimizer():
 
         filename = 'robust_perception/optimization/{}/results.csv'.format(folder_name)
         watcher = pool.apply_async(self.listener, (file_q, filename))
-        # print(watcher.get())
 
         try:
             result = func_timeout(self.max_time, pool.starmap,
@@ -896,8 +895,8 @@ def main():
     mug_initial_pose = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
     mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
-    # max_sec = 60.0 * 60.0 * 5.0
-    max_sec = 30.0
+    max_sec = 60.0 * 60.0 * 5.0
+    # max_sec = 30.0
     optimizer = Optimizer(num_mugs=3, mug_initial_pose=mug_initial_pose,
         mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound, max_evaluations=50000,
         max_time=max_sec)
