@@ -13,6 +13,7 @@ import os
 import random
 import time
 import yaml
+import shutil
 import sys
 
 # pydrake imports
@@ -72,6 +73,8 @@ from scipy import optimize
 import cma
 
 from ..image_classification.simple_net import SimpleNet
+from ..optimization.optimizer import OptimizerType
+from ..optimization.retraining import MyNet
 
 class FoundCounterexample(Exception):
     pass
@@ -133,37 +136,91 @@ def enablePrint():
 
 
 class MugPipeline():
-    def __init__(self, num_mugs, initial_poses, max_counterexamples):
+
+    def __init__(self, num_mugs, max_counterexamples, retrain_with_counterexamples):
         self.num_mugs = num_mugs
-        self.initial_poses = initial_poses
+        self.initial_poses = None
         self.max_counterexamples = max_counterexamples
+        self.optimizer_type = None
 
         self.final_poses = None
         
         self.folder_name = None
         self.all_poses = []
-        # self.all_probabilities = []
+
         self.pose_bundle = None
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
 
         self.metadata_filename = None
 
         self.iteration_num = 0
+        self.meshcat_visualizer_desired = False
+
+        self.retrain_with_counterexamples = retrain_with_counterexamples
 
         if torch.cuda.is_available():
             cuda.init()
             torch.cuda.set_device(0)
             print(cuda.Device(torch.cuda.current_device()).name())
 
+    def set_optimizer_type(self, optimizer_type):
+        self.optimizer_type = optimizer_type
+
     def get_all_poses(self):
         return self.all_poses
 
-    # def get_all_probabilities(self):
-    #     global all_probabilities
-    #     return all_probabilities
-
     def set_folder_name(self, folder_name):
         self.folder_name = folder_name
+
+    def run_meshcat(self, builder, scene_graph, visualizer):
+        # Add meshcat visualizer
+        blockPrint()
+        visualizer = builder.AddSystem(MeshcatVisualizer(
+            scene_graph,
+            zmq_url="tcp://127.0.0.1:6000",
+            draw_period=0.001))
+        builder.Connect(scene_graph.get_pose_bundle_output_port(),
+                visualizer.get_input_port(0))
+        enablePrint()
+
+    def write_poses_to_file(self, filename, q0, q0_final):
+        self.metadata_filename = filename + '_metadata.txt'
+        f = open(self.metadata_filename, "w+")
+
+        self.after_solver_poses = q0.flatten()
+        self.final_poses = q0_final.flatten()
+
+        def divide_chunks(l, n):     
+            # looping till length l 
+            for i in range(0, len(l), n):  
+                yield l[i:i + n] 
+
+        n = 7
+
+        self.initial_poses = list(divide_chunks(self.initial_poses, n))
+        self.after_solver_poses = list(divide_chunks(self.after_solver_poses, n))
+        self.final_poses = list(divide_chunks(self.final_poses, n))
+
+        for pose in self.initial_poses:
+            for count, item in enumerate(pose): 
+                f.write("%8.8f " % item)
+            f.write("\n")
+
+        f.write('\n----------\n')
+
+        for pose in self.after_solver_poses:
+            for count, item in enumerate(pose): 
+                f.write("%8.8f " % item)
+            f.write("\n")
+
+        f.write('\n----------\n')
+
+        for pose in self.final_poses:
+            for count, item in enumerate(pose): 
+                f.write("%8.8f " % item)
+            f.write("\n")
+
+        f.close()
 
     def create_image(self, iteration_num, process_num=None):
         """
@@ -224,15 +281,8 @@ class MugPipeline():
 
             # print(poses)
 
-            # Add meshcat visualizer
-            # blockPrint()
-            # visualizer = builder.AddSystem(MeshcatVisualizer(
-            #     scene_graph,
-            #     zmq_url="tcp://127.0.0.1:6000",
-            #     draw_period=0.001))
-            # builder.Connect(scene_graph.get_pose_bundle_output_port(),
-            #         visualizer.get_input_port(0))
-            # enablePrint()
+            if self.meshcat_visualizer_desired:
+                self.run_meshcat_visualizer(builder, scene_graph, visualizer)
 
             # Add camera
             depth_camera_properties = DepthCameraProperties(
@@ -342,56 +392,22 @@ class MugPipeline():
             if self.folder_name is None:
                 raise Exception('have not yet set the folder name')
 
-            filename = 'robust_perception/optimization/{}/{:05d}_{}'.format(
-                self.folder_name, iteration_num, n_objects)
+            # filename = 'robust_perception/optimization/{}/{:05d}_{}'.format(
+            #     self.folder_name, iteration_num, n_objects)
+            filename = '{}/{}_{:05d}'.format(self.folder_name, n_objects, iteration_num)
 
+            # Local optimizer
             if process_num is not None:
-                filename = 'robust_perception/optimization/{}/{:03d}/{:05d}_{}'.format(
-                    self.folder_name, process_num, iteration_num, n_objects)                
+                filename = 'robust_perception/optimization/{}/{:03d}/{}_{:05d}'.format(
+                    self.folder_name, process_num, n_objects, iteration_num)                
 
             # time.sleep(0.5)
             rgb_and_label_image_visualizer.save_image(filename)
 
-            self.metadata_filename = filename + '_metadata.txt'
-            f = open(self.metadata_filename, "w+")
-
-            self.after_solver_poses = q0.flatten()
-            self.final_poses = q0_final.flatten()
-
-            def divide_chunks(l, n):     
-                # looping till length l 
-                for i in range(0, len(l), n):  
-                    yield l[i:i + n] 
-
-            n = 7
-
-            self.initial_poses = list(divide_chunks(self.initial_poses, n))
-            self.after_solver_poses = list(divide_chunks(self.after_solver_poses, n))
-            self.final_poses = list(divide_chunks(self.final_poses, n))
-
-            for pose in self.initial_poses:
-                for count, item in enumerate(pose): 
-                    f.write("%8.8f " % item)
-                f.write("\n")
-
-            f.write('\n----------\n')
-
-            for pose in self.after_solver_poses:
-                for count, item in enumerate(pose): 
-                    f.write("%8.8f " % item)
-                f.write("\n")
-
-            f.write('\n----------\n')
-
-            for pose in self.final_poses:
-                for count, item in enumerate(pose): 
-                    f.write("%8.8f " % item)
-                f.write("\n")
-
-            f.close()
+            # Write to a file
+            self.write_poses_to_file(filename, q0, q0_final)
 
             # print('DONE with iteration {}!'.format(self.iteration_num))
-            # time.sleep(5.0)
 
         except Exception as e:
             print("Unhandled exception ", e)
@@ -407,20 +423,17 @@ class MugPipeline():
         # print('in predict_image image_path: {}'.format(image_path))
         image = None
         try:
-            image = Image.open(image_path + '_color.png')
+            image = Image.open(image_path)
         except FileNotFoundError:
             print("image isn't in path {}, exception".format(image_path))
 
         image = image.convert('RGB')
 
-        # max_edge_length = 369   # TODO find this programatically
-
         # Define transformations for the image
         transformation = transforms.Compose([
-            # transforms.CenterCrop((max_edge_length)),
             transforms.Resize(32),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         ])
 
         # Preprocess the image
@@ -449,15 +462,6 @@ class MugPipeline():
         index = output.data.numpy().argmax()
 
         classes = [1, 2, 3, 4, 5]
-
-        word = 'are'
-        s = 's'
-        if classes[index] == 1:
-            word = 'is'
-            s = ''
-
-        # print('there {} {} mug{}'.format(word, classes[index], s))
-
         is_correct = True
 
         if classes[index] != self.num_mugs:
@@ -474,7 +478,8 @@ class MugPipeline():
         return probabilities.data.numpy()[0], is_correct
 
     def run_inference(self, poses, iteration_num, all_probabilities=None,
-            total_iterations=None, num_counterexamples=None, counter_lock=None, file_q=None):
+            total_iterations=None, num_counterexamples=None,
+            model_number=0, model_number_lock=None, counter_lock=None, file_q=None):
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
@@ -483,21 +488,24 @@ class MugPipeline():
         # print('iteration_num', iteration_num)
         # print('poses', poses)
 
-        # change this horrendous way
+        if self.optimizer_type is None:
+            raise ValueError('Need to set optimizer type before running inference')
+
         process_num = iteration_num
-        if 'nelder_mead' in self.folder_name:
+        if self.optimizer_type == OptimizerType.NELDER_MEAD:
             iteration_num = self.iteration_num
 
         print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num))
 
-        path = os.path.join(self.package_directory,
-            '../image_classification/mug_numeration_classifier.model')
-        checkpoint = torch.load(path, map_location=torch.device('cpu'))
+        model_path = os.path.join(self.package_directory,
+            '../data/experiment1/models/mug_numeration_classifier_{}.model'.format(model_number.value))
+        #### TODO change this to use cuda/gpu (and figure out how that works w parallelization)
+        checkpoint = torch.load(model_path, map_location=torch.device('cpu'))
         model = SimpleNet(num_classes=5)
         model.load_state_dict(checkpoint)
         model.eval()
 
-        if "pycma" in self.folder_name:
+        if self.optimizer_type == OptimizerType.PYCMA:
             for i in range(len(poses)):
                 if i % 7 == 4 or i % 7 == 5:
                     poses[i] = poses[i] / 10.0
@@ -518,13 +526,46 @@ class MugPipeline():
             return 1.01
 
         # TODO change this, maybe just take in process_num regardless
-        if 'nelder_mead' in self.folder_name:
+        if self.optimizer_type == OptimizerType.NELDER_MEAD:
             imagefile = self.create_image(iteration_num, process_num)
         else:
             imagefile = self.create_image(iteration_num)
 
+        imagefile += '_color.png'
+
         # Run prediction function and obtain predicted class index
         probabilities, is_correct = self.predict_image(model, imagefile)
+
+        training_set_dir = os.path.join(self.package_directory, '../data/experiment1/training_set')
+        test_set_dir = os.path.join(self.package_directory, '../data/experiment1/test_set')
+        counterexample_set_dir = os.path.join(self.package_directory, '../data/experiment1/counterexample_set')
+
+        if not is_correct:
+            if self.retrain_with_counterexamples:
+                # Find {train, test, adversarial} set accuracy
+
+                # Training set is divided into classes
+                training_set_num_dir = os.path.join(training_set_dir, '{}'.format(self.num_mugs))
+
+                imagefile_lst = imagefile.split('/')
+                imagefile_lst[-1] = 'counterex_' + imagefile_lst[-1]
+                new_imagefile = os.path.join(
+                    training_set_num_dir, '{}{}'.format(imagefile_lst[-1], '_color.png'))
+
+                print('imagefile: {}, training_set: {}'.format(imagefile, new_imagefile))
+
+                shutil.move(imagefile, new_imagefile)
+
+                # new_net = MyNet(
+                #     model_number.value, 
+                #     training_set_dir=training_set_dir,
+                #     test_set_dir=test_set_dir,
+                #     counterexample_set_dir=countereample_set_dir)
+                # new_net.train(num_epochs=200)
+            else:
+                # Not retraining, just generating counterexample set
+                # shutil.move(imagefile, counterexample_set_dir)
+                print('imagefile: {}, counterexample_set: {}'.format(imagefile, counterexample_set_dir))
 
         # Return probabilities
         probability = probabilities[self.num_mugs - 1]
@@ -548,14 +589,16 @@ class MugPipeline():
         if counter_lock:
             with counter_lock:
                 total_iterations.value += 1
+
                 if not is_correct:
                     num_counterexamples.value += 1
 
                 if (self.max_counterexamples is not None and
                     num_counterexamples.value >= self.max_counterexamples):
+                    print('found {} counterexamples'.format(num_counterexamples.value))
                     raise FoundMaxCounterexamples
 
-        if 'nelder_mead' in self.folder_name:
+        if self.optimizer_type == OptimizerType.NELDER_MEAD:
             self.iteration_num += 1
 
             if not is_correct:
