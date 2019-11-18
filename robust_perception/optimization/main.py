@@ -1,10 +1,28 @@
 from ..optimization.optimizer import OptimizerType
 from ..optimization.optimizer import Optimizer
 
+from ..optimization.model_trainer import MyNet
+
+def train_initial_model():
+    """
+    Run initial model training
+    """
+
+    models_dir = '../data/experiment1/models'
+    training_set_dir = '../data/experiment1/training_set'
+    test_set_dir = '../data/experiment1/test_set'
+    counterexample_set_dir = '../data/experiment1/counterexample_set'
+
+    net = MyNet(model_file_number=0, models_dir=models_dir, training_set_dir=training_set_dir,
+        test_set_dir=test_set_dir, counterexample_set_dir=counterexample_set_dir)
+    net.train(num_epochs=200)
+
 def main():
     """
     Runs entire mug generation, optimization, and retraining pipeline.
     """
+
+    # train_initial_model()
 
     ### Initial parameters
 

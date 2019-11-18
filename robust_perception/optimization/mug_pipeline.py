@@ -74,7 +74,7 @@ import cma
 
 from ..image_classification.simple_net import SimpleNet
 from ..optimization.optimizer import OptimizerType
-from ..optimization.retraining import MyNet
+from ..optimization.model_trainer import MyNet
 
 class FoundCounterexample(Exception):
     pass
@@ -498,11 +498,8 @@ class MugPipeline():
         print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num))
 
         model_path = os.path.join(self.package_directory,
-            '../data/experiment1/models/mug_numeration_classifier_{}.model'.format(model_number.value))
-        #### TODO change this to use cuda/gpu (and figure out how that works w parallelization)
-        checkpoint = torch.load(model_path, map_location=torch.device('cpu'))
-        model = SimpleNet(num_classes=5)
-        model.load_state_dict(checkpoint)
+            '../data/experiment1/models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
+        (model, _, _) = MyNet.load_checkpoint(model_path)
         model.eval()
 
         if self.optimizer_type == OptimizerType.PYCMA:
@@ -552,19 +549,25 @@ class MugPipeline():
                 new_imagefile = os.path.join(
                     training_set_num_dir, '{}{}'.format(imagefile_lst[-1], '_color.png'))
 
-                print('imagefile: {}, training_set: {}'.format(imagefile, new_imagefile))
+                ## TODO add a lock on this
+                model_number.value += 1
+
+                print('model_number: {}, imagefile: {}, training_set: {}'.format(
+                    model_number.value, imagefile, new_imagefile))
 
                 shutil.move(imagefile, new_imagefile)
 
-                # new_net = MyNet(
-                #     model_number.value, 
-                #     training_set_dir=training_set_dir,
-                #     test_set_dir=test_set_dir,
-                #     counterexample_set_dir=countereample_set_dir)
-                # new_net.train(num_epochs=200)
+                new_net = MyNet(
+                    model_number.value, 
+                    training_set_dir=training_set_dir,
+                    test_set_dir=test_set_dir,
+                    counterexample_set_dir=counterexample_set_dir)
+
+                new_net.load_and_set_checkpoint(model_path)
+                new_net.train(num_epochs=50)
             else:
                 # Not retraining, just generating counterexample set
-                # shutil.move(imagefile, counterexample_set_dir)
+                shutil.move(imagefile, counterexample_set_dir)
                 print('imagefile: {}, counterexample_set: {}'.format(imagefile, counterexample_set_dir))
 
         # Return probabilities

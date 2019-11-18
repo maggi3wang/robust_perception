@@ -37,7 +37,7 @@ class OptimizerType(Enum):
 # Local imports
 from ..optimization.eval_parallel import EvalParallel3
 from ..optimization.mug_pipeline import MugPipeline, FoundCounterexample, FoundMaxCounterexamples
-from ..optimization.retraining import MyNet
+from ..optimization.model_trainer import MyNet
 
 import torch
 

@@ -1,4 +1,4 @@
-from simple_net import SimpleNet
+from ..image_classification.simple_net import SimpleNet
 
 import torch
 import torch.nn as nn
@@ -21,14 +21,15 @@ def predict_image(model, image_path, num_mugs):
     image = Image.open(image_path)
     image = image.convert('RGB')
 
-    max_edge_length = 369   # TODO find this programatically
+    # max_edge_length = 369   # TODO find this programatically
 
     # Define transformations for the image
     transformation = transforms.Compose([
-        transforms.CenterCrop((max_edge_length)),
+        # transforms.CenterCrop((max_edge_length)),
         transforms.Resize(32),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     # Preprocess the image
@@ -79,7 +80,7 @@ def predict_image(model, image_path, num_mugs):
     return index
 
 def main():
-    path = "mug_numeration_classifier.model"
+    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/experiment1/models/mug_numeration_classifier_0.model'
     checkpoint = torch.load(path, map_location=torch.device('cpu'))
     model = SimpleNet(num_classes=5)
     model.load_state_dict(checkpoint)
@@ -93,8 +94,10 @@ def main():
     # imagefile = "5_1259_color.png"
 
     # fix this gross method
-    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/dataset_generation/images/classification_clean/training_set/3'
+    # path = '/home/maggiewang/Workspace/robust_perception/robust_perception/dataset_generation/images/classification_clean/training_set/3'
     # path = '/home/maggiewang/Workspace/robust_perception/robust_perception/optimization/data_rbfopt'
+
+    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/experiment1/counterexample_set/3'
 
     for file in os.listdir(path):
         # print(file)
