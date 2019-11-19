@@ -1,3 +1,4 @@
+import pycuda.driver as cuda
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -52,13 +53,13 @@ class MyNet():
         counterexample_dataset = datasets.ImageFolder(root=counterexample_set_dir, transform=plain_transform)
 
         self.train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=4, shuffle=True, num_workers=4)
+            train_dataset, batch_size=4, shuffle=True, num_workers=0)
 
         self.test_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=4, shuffle=True, num_workers=4)
+            test_dataset, batch_size=4, shuffle=True, num_workers=0)
 
         self.counterexample_loader = torch.utils.data.DataLoader(
-            counterexample_dataset, batch_size=4, shuffle=True, num_workers=4)
+            counterexample_dataset, batch_size=4, shuffle=True, num_workers=0)
 
         self.training_set_size = len(train_dataset)
         self.test_set_size = len(test_dataset)
@@ -81,6 +82,9 @@ class MyNet():
         print('created a model')
 
         if self.cuda_avail:
+            cuda.init()
+            torch.cuda.set_device(0)
+            print(cuda.Device(torch.cuda.current_device()).name())
             self.model.cuda()
 
         self.initial_lr = 0.001
@@ -95,6 +99,8 @@ class MyNet():
         self.test_accuracies = []
         self.counterexample_accuracies = []
 
+        # torch.set_num_threads(1)
+
     def adjust_learning_rate(self, epoch):
         """
         Learning rate adjustment function that divides the learning rate by 
@@ -107,6 +113,7 @@ class MyNet():
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = lr
 
+    @staticmethod
     def load_checkpoint(filename):
         start_epoch = 0
         model = SimpleNet(num_classes=5)
@@ -117,13 +124,22 @@ class MyNet():
             start_epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
+
+            # Move model to GPU
+            model.cuda()
+
+            # Move optimizer to GPU
+            for state in optimizer.state.values():
+                for k,v in state.items():
+                    if isinstance(v, torch.Tensor):
+                        state[k] = v.cuda()
         else:
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), filename)
 
         return model, optimizer, start_epoch
 
-    def load_and_set_checkpoint(filename):
-        self.model, self.optimizer, start_epoch = load_checkpoint(filename)
+    def load_and_set_checkpoint(self, filename):
+        self.model, self.optimizer, start_epoch = self.load_checkpoint(filename)
 
     def save_checkpoint(self, epoch):
         """
@@ -181,7 +197,8 @@ class MyNet():
 
         model_accuracies_csv = os.path.join(self.models_dir, 'model_{:03d}.csv'.format(self.model_file_number))
         f = open(model_accuracies_csv, 'w')
-        f.write('epoch, training_loss, training_acc, test_acc, counterexample_acc\n')
+        f.write('epoch, training_loss, training_acc, test_acc, counterexample_acc, is_new_best\n')
+        f.flush()
 
         best_acc = 0.0
 
@@ -227,12 +244,6 @@ class MyNet():
             test_acc = self.evaluate_accuracy(self.test_loader, self.test_set_size)
             counterexample_acc = self.evaluate_accuracy(self.counterexample_loader, self.counterexample_set_size)
 
-            # Save the model if the test acc is greater than our current best
-            if test_acc > best_acc:
-                self.save_checkpoint(epoch)
-                best_acc = test_acc
-                print("New best acc is {}, epoch {}".format(best_acc, epoch))
-
             # Print the metrics
             # print("Epoch {}, Train Accuracy: {}, Train Loss: {}, Test Accuracy: {},"
             #     "Counterexample Accuracy: {}".format(
@@ -242,18 +253,25 @@ class MyNet():
             # self.test_accuracies.append(test_acc)
             # self.counterexample_accuracies.append(counterexample_acc)
 
-            f.write('{:3d}, {:2.5f}, {:1.5f}, {:1.5f}, {:1.5f}\n'.format(epoch, train_loss, train_acc, test_acc, counterexample_acc))
+            f.write('{:3d}, {:2.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1d},\n'.format(
+                epoch, train_loss, train_acc, test_acc, counterexample_acc, test_acc > best_acc))
             f.flush()
 
-        # Move last epoch to current model and delete all other models
-        model_file_base = "mug_numeration_classifier_{:03d}.pth.tar".format(self.model_file_number)
-        model_file_name = os.path.join(self.model_dir, model_file_base)
+            # Save the model if the test acc is greater than our current best
+            if test_acc > best_acc:
+                self.save_checkpoint(epoch)
+                best_acc = test_acc
+                print("New best acc is {}, epoch {}".format(best_acc, epoch))
 
-        print('moving {} to {}'.format(self.model_file_names[-1], model_file))
+        # Move last epoch to current model and delete all other models
+        model_file_base = 'mug_numeration_classifier_{:03d}.pth.tar'.format(self.model_file_number)
+        model_file_name = os.path.join(self.models_dir, model_file_base)
+
+        print('moving {} to {}'.format(self.model_file_names[-1], model_file_name))
         shutil.move(self.model_file_names[-1], model_file_name)
 
-        for model_file in self.model_file_names:
-            os.remove(model_file)
+        for model_file_name in self.model_file_names:
+            os.remove(model_file_name)
 
         # print('train_accuracies: {}'.format(self.train_accuracies))
         # print('test_accuracies: {}'.format(self.test_accuracies))

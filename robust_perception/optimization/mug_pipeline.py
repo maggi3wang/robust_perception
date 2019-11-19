@@ -392,8 +392,6 @@ class MugPipeline():
             if self.folder_name is None:
                 raise Exception('have not yet set the folder name')
 
-            # filename = 'robust_perception/optimization/{}/{:05d}_{}'.format(
-            #     self.folder_name, iteration_num, n_objects)
             filename = '{}/{}_{:05d}'.format(self.folder_name, n_objects, iteration_num)
 
             # Local optimizer
@@ -443,13 +441,11 @@ class MugPipeline():
         # Add an extra batch dimension since pytorch treats all images as batches
         image_tensor = image_tensor.unsqueeze_(0)
 
-        image_tensor.cuda()
-
         # Turn the input into a Variable
-        input = Variable(image_tensor)
+        input_image = Variable(image_tensor.cuda())
 
         # Predict the class of the image
-        output = model(input)
+        output = model(input_image)
 
         # Add a softmax layer to extract probabilities
         sm = torch.nn.Softmax(dim=1)
@@ -459,7 +455,7 @@ class MugPipeline():
         # print('probabilities: {}'.format(probabilities.data.numpy()))
 
         # print('output data: ', output.data.numpy())
-        index = output.data.numpy().argmax()
+        index = output.data.cpu().numpy().argmax()
 
         classes = [1, 2, 3, 4, 5]
         is_correct = True
@@ -475,7 +471,7 @@ class MugPipeline():
                 classes[index], self.num_mugs))
             f.close()
 
-        return probabilities.data.numpy()[0], is_correct
+        return probabilities.data.cpu().numpy()[0], is_correct
 
     def run_inference(self, poses, iteration_num, all_probabilities=None,
             total_iterations=None, num_counterexamples=None,
@@ -485,7 +481,7 @@ class MugPipeline():
         It must be a function, not an instancemethod, to work with multiprocessing
         """
 
-        # print('iteration_num', iteration_num)
+        print('iteration_num', iteration_num)
         # print('poses', poses)
 
         if self.optimizer_type is None:
@@ -533,9 +529,12 @@ class MugPipeline():
         # Run prediction function and obtain predicted class index
         probabilities, is_correct = self.predict_image(model, imagefile)
 
-        training_set_dir = os.path.join(self.package_directory, '../data/experiment1/training_set')
-        test_set_dir = os.path.join(self.package_directory, '../data/experiment1/test_set')
-        counterexample_set_dir = os.path.join(self.package_directory, '../data/experiment1/counterexample_set')
+        folder = os.path.join(self.package_directory, '../data/experiment1')
+
+        training_set_dir = os.path.join(folder, 'training_set')
+        test_set_dir = os.path.join(folder, 'test_set')
+        counterexample_set_dir = os.path.join(folder, 'counterexample_set')
+        models_dir = os.path.join(folder, 'models')
 
         if not is_correct:
             if self.retrain_with_counterexamples:
@@ -546,28 +545,29 @@ class MugPipeline():
 
                 imagefile_lst = imagefile.split('/')
                 imagefile_lst[-1] = 'counterex_' + imagefile_lst[-1]
-                new_imagefile = os.path.join(
-                    training_set_num_dir, '{}{}'.format(imagefile_lst[-1], '_color.png'))
+                new_imagefile = os.path.join(training_set_num_dir, imagefile_lst[-1])
 
-                ## TODO add a lock on this
-                model_number.value += 1
+                if model_number_lock:
+                    with model_number_lock:
+                        model_number.value += 1
 
                 print('model_number: {}, imagefile: {}, training_set: {}'.format(
                     model_number.value, imagefile, new_imagefile))
 
-                shutil.move(imagefile, new_imagefile)
+                shutil.copy(imagefile, new_imagefile)
 
                 new_net = MyNet(
                     model_number.value, 
                     training_set_dir=training_set_dir,
                     test_set_dir=test_set_dir,
-                    counterexample_set_dir=counterexample_set_dir)
+                    counterexample_set_dir=counterexample_set_dir,
+                    models_dir=models_dir)
 
                 new_net.load_and_set_checkpoint(model_path)
                 new_net.train(num_epochs=50)
             else:
                 # Not retraining, just generating counterexample set
-                shutil.move(imagefile, counterexample_set_dir)
+                shutil.copy(imagefile, counterexample_set_dir)
                 print('imagefile: {}, counterexample_set: {}'.format(imagefile, counterexample_set_dir))
 
         # Return probabilities
@@ -608,6 +608,7 @@ class MugPipeline():
                 print('raising FoundCounterexample exception')
                 raise FoundCounterexample
 
+        print('probability: {}'.format(probability))
         sys.stdout.flush()
 
         return probability

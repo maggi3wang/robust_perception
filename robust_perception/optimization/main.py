@@ -15,7 +15,7 @@ def train_initial_model():
 
     net = MyNet(model_file_number=0, models_dir=models_dir, training_set_dir=training_set_dir,
         test_set_dir=test_set_dir, counterexample_set_dir=counterexample_set_dir)
-    net.train(num_epochs=200)
+    net.train(num_epochs=70)
 
 def main():
     """
@@ -43,7 +43,7 @@ def main():
     optimizer = Optimizer(
         num_mugs=3, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
         max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
-        num_processes=20, retrain_with_counterexamples=True)
+        num_processes=15, retrain_with_counterexamples=True)
 
     # Run optimizer based on optimizer type
     if optimizer_type == OptimizerType.PYCMA:
