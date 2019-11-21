@@ -39,11 +39,8 @@ def predict_image(model, image_path, num_mugs):
     # Add an extra batch dimension since pytorch treats all images as batches
     image_tensor = image_tensor.unsqueeze_(0)
 
-    if torch.cuda.is_available():
-        image_tensor.cuda()
-
     # Turn the input into a Variable
-    input = Variable(image_tensor)
+    input = Variable(image_tensor.cuda())
 
     # Predict the class of the image
     output = model(input)
@@ -53,10 +50,10 @@ def predict_image(model, image_path, num_mugs):
     probabilities = sm(output)
 
     np.set_printoptions(formatter={'float_kind':'{:f}'.format})
-    print('probabilities: {}'.format(probabilities.data.numpy()))
+    print('probabilities: {}'.format(probabilities.data.cpu().numpy()))
 
     # print('output data: ', output.data.numpy())
-    index = output.data.numpy().argmax()
+    index = output.data.cpu().numpy().argmax()
 
     classes = [1, 2, 3, 4, 5]
 
@@ -80,11 +77,14 @@ def predict_image(model, image_path, num_mugs):
     return index
 
 def main():
-    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/experiment1/models/mug_numeration_classifier_0.model'
-    checkpoint = torch.load(path, map_location=torch.device('cpu'))
+    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/experiment1/models/mug_numeration_classifier_001.pth.tar'
+    checkpoint = torch.load(path)
+
     model = SimpleNet(num_classes=5)
-    model.load_state_dict(checkpoint)
+    model.load_state_dict(checkpoint['state_dict'])
+    model.cuda()
     model.eval()
+
     # print(model)
 
     # imagefile = "3_62_color.png"

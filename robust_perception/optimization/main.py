@@ -15,12 +15,14 @@ def train_initial_model():
 
     net = MyNet(model_file_number=0, models_dir=models_dir, training_set_dir=training_set_dir,
         test_set_dir=test_set_dir, counterexample_set_dir=counterexample_set_dir)
-    net.train(num_epochs=70)
+    net.train(num_epochs=50)
 
 def main():
     """
     Runs entire mug generation, optimization, and retraining pipeline.
     """
+
+    # Get counterexamples
 
     # train_initial_model()
 

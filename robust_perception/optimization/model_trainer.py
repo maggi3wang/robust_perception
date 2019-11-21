@@ -198,7 +198,7 @@ class MyNet():
 
         model_accuracies_csv = os.path.join(self.models_dir, 'model_{:03d}.csv'.format(self.model_file_number))
         f = open(model_accuracies_csv, 'w')
-        f.write('epoch, training_loss, training_acc, test_acc, counterexample_acc, is_new_best\n')
+        f.write('epoch, training_loss, training_acc, test_acc, counterexample_acc, is_new_best,\n')
         f.flush()
 
         best_acc = 0.0

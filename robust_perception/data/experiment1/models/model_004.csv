@@ -1,4 +1,4 @@
-epoch, training_loss, training_acc, test_acc, counterexample_acc, is_new_best
+epoch, training_loss, training_acc, test_acc, counterexample_acc, is_new_best,
   0, 0.02147, 0.99516, 0.95467, 0.02041, 1,
   1, 0.08786, 0.97542, 0.90633, 0.02041, 0,
   2, 0.05485, 0.98343, 0.98267, 0.02041, 1,
