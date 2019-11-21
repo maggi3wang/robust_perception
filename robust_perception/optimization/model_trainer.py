@@ -18,6 +18,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import os
+import shutil
 
 from ..image_classification.simple_net import SimpleNet
 
@@ -267,8 +268,8 @@ class MyNet():
         model_file_base = 'mug_numeration_classifier_{:03d}.pth.tar'.format(self.model_file_number)
         model_file_name = os.path.join(self.models_dir, model_file_base)
 
-        print('moving {} to {}'.format(self.model_file_names[-1], model_file_name))
-        shutil.move(self.model_file_names[-1], model_file_name)
+        print('copying {} to {}'.format(self.model_file_names[-1], model_file_name))
+        shutil.copy(self.model_file_names[-1], model_file_name)
 
         for model_file_name in self.model_file_names:
             os.remove(model_file_name)

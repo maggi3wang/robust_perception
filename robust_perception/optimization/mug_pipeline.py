@@ -493,8 +493,9 @@ class MugPipeline():
 
         print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num))
 
-        model_path = os.path.join(self.package_directory,
-            '../data/experiment1/models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
+        with model_number_lock:
+            model_path = os.path.join(self.package_directory,
+                '../data/experiment1/models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
         (model, _, _) = MyNet.load_checkpoint(model_path)
         model.eval()
 
@@ -538,6 +539,7 @@ class MugPipeline():
 
         if not is_correct:
             if self.retrain_with_counterexamples:
+                print('retraining with counterex')
                 # Find {train, test, adversarial} set accuracy
 
                 # Training set is divided into classes
@@ -547,24 +549,23 @@ class MugPipeline():
                 imagefile_lst[-1] = 'counterex_' + imagefile_lst[-1]
                 new_imagefile = os.path.join(training_set_num_dir, imagefile_lst[-1])
 
-                if model_number_lock:
-                    with model_number_lock:
-                        model_number.value += 1
+                with model_number_lock:
+                    model_number.value += 1
 
-                print('model_number: {}, imagefile: {}, training_set: {}'.format(
-                    model_number.value, imagefile, new_imagefile))
+                    print('model_number: {}, imagefile: {}, training_set: {}'.format(
+                        model_number.value, imagefile, new_imagefile))
 
-                shutil.copy(imagefile, new_imagefile)
+                    shutil.copy(imagefile, new_imagefile)
 
-                new_net = MyNet(
-                    model_number.value, 
-                    training_set_dir=training_set_dir,
-                    test_set_dir=test_set_dir,
-                    counterexample_set_dir=counterexample_set_dir,
-                    models_dir=models_dir)
+                    new_net = MyNet(
+                        model_number.value, 
+                        training_set_dir=training_set_dir,
+                        test_set_dir=test_set_dir,
+                        counterexample_set_dir=counterexample_set_dir,
+                        models_dir=models_dir)
 
-                new_net.load_and_set_checkpoint(model_path)
-                new_net.train(num_epochs=50)
+                    new_net.load_and_set_checkpoint(model_path)
+                    new_net.train(num_epochs=50)
             else:
                 # Not retraining, just generating counterexample set
                 shutil.copy(imagefile, counterexample_set_dir)
@@ -589,17 +590,16 @@ class MugPipeline():
             res = '{}, {}, {},'.format(process_num, iteration_num, probability)
             file_q.put(res)
 
-        if counter_lock:
-            with counter_lock:
-                total_iterations.value += 1
+        with counter_lock:
+            total_iterations.value += 1
 
-                if not is_correct:
-                    num_counterexamples.value += 1
+            if not is_correct:
+                num_counterexamples.value += 1
 
-                if (self.max_counterexamples is not None and
-                    num_counterexamples.value >= self.max_counterexamples):
-                    print('found {} counterexamples'.format(num_counterexamples.value))
-                    raise FoundMaxCounterexamples
+            if (self.max_counterexamples is not None and
+                num_counterexamples.value >= self.max_counterexamples):
+                print('found {} counterexamples'.format(num_counterexamples.value))
+                raise FoundMaxCounterexamples
 
         if self.optimizer_type == OptimizerType.NELDER_MEAD:
             self.iteration_num += 1
