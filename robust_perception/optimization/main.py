@@ -22,21 +22,18 @@ def main():
     Runs entire mug generation, optimization, and retraining pipeline.
     """
 
-    # Get counterexamples
+    # Find held-out set of counterexamples
 
     # train_initial_model()
 
-    ### Initial parameters
+    ## Initial parameters
 
     # Parameters that are fairly variable
     optimizer_type = OptimizerType.PYCMA
 
     max_sec = None
-    max_counterexamples = 100
+    max_counterexamples = 200
     max_iterations = None
-    # max_sec = 60.0 * 60.0 * 5.0
-    # max_counterexamples = 100
-    # max_iterations = 50000
 
     # Parameters that are fairly static
     mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
@@ -45,7 +42,7 @@ def main():
     optimizer = Optimizer(
         num_mugs=3, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
         max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
-        num_processes=15, retrain_with_counterexamples=True)
+        num_processes=15, retrain_with_counterexamples=False)
 
     # Run optimizer based on optimizer type
     if optimizer_type == OptimizerType.PYCMA:

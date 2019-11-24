@@ -7,8 +7,6 @@ from itertools import repeat
 import math
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from multiprocessing import Process, Pool, Queue, Manager, Lock, Value
-import multiprocessing
 import numpy as np
 import os
 import random
@@ -23,6 +21,9 @@ import nevergrad as ng
 import rbfopt
 from scipy import optimize
 import cma
+
+from torch.multiprocessing import Process, Pool, Queue, Manager, Lock, Value
+import torch.multiprocessing
 
 class OptimizerType(Enum):
     """
@@ -54,7 +55,7 @@ class Optimizer():
             ... TODO
         """
 
-        multiprocessing.set_start_method('spawn')
+        torch.multiprocessing.set_start_method('spawn')
 
         self.mug_initial_poses = []
 
@@ -93,6 +94,8 @@ class Optimizer():
 
         self.all_probabilities = None
 
+        self.retrain_with_counterexamples = retrain_with_counterexamples
+
         # TODO make this global
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -101,13 +104,18 @@ class Optimizer():
 
     @staticmethod
     def run_inference(poses, iteration_num, mug_pipeline, all_probabilities, total_iterations,
-        num_counterexamples, model_number, model_number_lock, counter_lock, file_q):
+        num_counterexamples, model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q):
         """
         Wrapper for optimizer's entry point function
         """
+        print('at beg of run_inference iter {}'.format(iteration_num), flush=True)
+
         prob = mug_pipeline.run_inference(
             poses, iteration_num, all_probabilities, total_iterations,
-            num_counterexamples, model_number, model_number_lock, counter_lock, file_q)
+            num_counterexamples, model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q)
+
+        print('at end of run_inference iter {}'.format(iteration_num), flush=True)
+
         return prob
 
     def run_pycma(self):
@@ -125,7 +133,12 @@ class Optimizer():
         # cma.plot()
 
         # folder_name = "data_pycma"
-        folder_name = os.path.join(self.package_directory, '../data/experiment1/run_with_retraining')  
+
+        if self.retrain_with_counterexamples:
+            folder_name = os.path.join(self.package_directory, '../data/experiment1/run_with_retraining')
+        else:
+            folder_name = os.path.join(self.package_directory, '../data/experiment1/initial_optimization_run')
+
         self.mug_pipeline.set_folder_name(folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.PYCMA)
 
@@ -139,7 +152,7 @@ class Optimizer():
         print(self.mug_initial_poses)
 
         es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0,
-            {'bounds': [-1.0, 1.0], 'verb_disp': 1})
+            {'bounds': [-1.0, 1.0], 'verb_disp': 1, 'popsize': self.num_processes})
 
         iter_num = 0
 
@@ -148,6 +161,8 @@ class Optimizer():
 
         manager = Manager()
         self.all_probabilities = manager.list()
+        all_probabilities_lock = manager.Lock()
+
         self.total_iterations = manager.Value('d', 0)
         self.num_counterexamples = manager.Value('d', 0)
 
@@ -162,25 +177,42 @@ class Optimizer():
         watcher = Process(target=self.listener, args=(file_q, filename))
         watcher.start()
 
+        # q = manager.Queue()
+
+        # model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+        #             '../data/experiment1/models/mug_numeration_classifier_{:03d}.pth.tar'.format(0))
+        # (model, _, _) = MyNet.load_checkpoint(model_path)
+        # model.eval()
+        # model.share_memory()
+        # q.put(model)
+
         while not es.stop():
             try:
                 ep = EvalParallel3(self.run_inference, number_of_processes=self.num_processes)
                 lst = range(iter_num, iter_num + self.num_processes)
+                print('lst: {}'.format(lst))
                 X = es.ask()
                 elapsed_time = time.time() - start_time
                 ep(X, lst=lst, args=(self.mug_pipeline, self.all_probabilities,
-                    self.total_iterations, self.num_counterexamples, 
-                    self.model_number, model_number_lock, counter_lock, file_q),
+                    self.total_iterations, self.num_counterexamples,
+                    self.model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q),
                     timeout=(self.max_time - elapsed_time))
-            except multiprocessing.context.TimeoutError:
-                print('timed out!')
+            except torch.multiprocessing.context.TimeoutError:
+                print('timed out!', flush=True)
                 break
             except FoundMaxCounterexamples:
                 print('found {} counterexamples!'.format(self.max_counterexamples))
                 break
+            except Exception as e:
+                print("Unhandled exception ", e)
+                raise
+            except:
+                print("Unhandled unnamed exception in pycma")
+                raise
 
             iter_num += self.num_processes
             torch.cuda.empty_cache()
+            print('calling ep.terminate()', flush=True)
             ep.terminate()
 
         elapsed_time = time.time() - start_time

@@ -1,13 +1,13 @@
 from functools import partial
 import numpy as np
-from multiprocessing import Pool as ProcessingPool
+from torch.multiprocessing import Pool
 import warnings
 
 class EvalParallel3(object):
     def __init__(self, fitness_function=None, number_of_processes=None):
         self.fitness_function = fitness_function
         self.processes = number_of_processes
-        self.pool = ProcessingPool(self.processes)
+        self.pool = Pool(self.processes)
 
     def __call__(self, solutions, fitness_function=None, lst=None, args=(), timeout=None):
         """evaluate a list/sequence of solution-"vectors", return a list

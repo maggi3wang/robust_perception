@@ -6,8 +6,6 @@ from enum import Enum
 from itertools import repeat
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from multiprocessing import Pool, Queue, Manager, Lock, Value
-import multiprocessing
 import numpy as np
 import os
 import random
@@ -279,7 +277,7 @@ class MugPipeline():
 
             mbp.Finalize()
 
-            # print(poses)
+            # print('poses: {}'.format(poses), flush=True)
 
             if self.meshcat_visualizer_desired:
                 self.run_meshcat_visualizer(builder, scene_graph, visualizer)
@@ -320,7 +318,8 @@ class MugPipeline():
             # simulator.set_target_realtime_rate(1.0)
             simulator.set_publish_every_time_step(False)
             simulator.Initialize()
-            
+            # print('initialized simulator', flush=True)
+
             ik = InverseKinematics(mbp, mbp_context)
             q_dec = ik.q()
             prog = ik.get_mutable_prog()
@@ -363,16 +362,18 @@ class MugPipeline():
             # print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
             # print(type(prog))
             result = mp.Solve(prog)
-            # print("Solve info: ", result)
+            # print("Solve info: {}".format(result), flush=True)
             # print("Solved in %f seconds" % (time.time() - start_time))
             # print(result.get_solver_id().name())
             q0_proj = result.GetSolution(q_dec)
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
-            # print('q0_initial: ', q0_initial)
+            # print('q0_initial: {}'.format(q0_initial), flush=True)
 
             converged = False
             t = 0.1
+
+            start_time = time.time()
 
             while not converged:
                 simulator.AdvanceTo(t)
@@ -386,8 +387,14 @@ class MugPipeline():
                 if np.linalg.norm(velocities) < 0.05:
                     converged = True
 
+                # If haven't timed out in 5 min, just set converged = True
+
+                if (time.time() - start_time) > 5 * 60:
+                    converged = True
+                    print('TIMED OUT IN FORWARD SIMULATION!')
+
             q0_final = mbp.GetPositions(mbp_context).copy()
-            # print('q0_final: ', q0_final)
+            # print('q0_final: {}'.format(q0_final), flush=True)
 
             if self.folder_name is None:
                 raise Exception('have not yet set the folder name')
@@ -399,7 +406,6 @@ class MugPipeline():
                 filename = 'robust_perception/optimization/{}/{:03d}/{}_{:05d}'.format(
                     self.folder_name, process_num, n_objects, iteration_num)                
 
-            # time.sleep(0.5)
             rgb_and_label_image_visualizer.save_image(filename)
 
             # Write to a file
@@ -408,11 +414,11 @@ class MugPipeline():
             # print('DONE with iteration {}!'.format(self.iteration_num))
 
         except Exception as e:
-            print("Unhandled exception ", e)
+            print("Unhandled exception ", e, flush=True)
             raise
 
         except:
-            print("Unhandled unnamed exception, probably sim error")
+            print("Unhandled unnamed exception, probably sim error", flush=True)
             raise
 
         return filename
@@ -445,6 +451,10 @@ class MugPipeline():
         input_image = Variable(image_tensor.cuda())
 
         # Predict the class of the image
+        # with model_number_lock:
+        #     # global model
+        #     model = q.get()
+        #    output = model(input_image)
         output = model(input_image)
 
         # Add a softmax layer to extract probabilities
@@ -475,13 +485,14 @@ class MugPipeline():
 
     def run_inference(self, poses, iteration_num, all_probabilities=None,
             total_iterations=None, num_counterexamples=None,
-            model_number=0, model_number_lock=None, counter_lock=None, file_q=None):
+            model_number=0, model_number_lock=None, counter_lock=None, all_probabilities_lock=None,
+            file_q=None):
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
         """
 
-        print('iteration_num', iteration_num)
+        print('iteration_num', iteration_num, flush=True)
         # print('poses', poses)
 
         if self.optimizer_type is None:
@@ -491,13 +502,7 @@ class MugPipeline():
         if self.optimizer_type == OptimizerType.NELDER_MEAD:
             iteration_num = self.iteration_num
 
-        print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num))
-
-        with model_number_lock:
-            model_path = os.path.join(self.package_directory,
-                '../data/experiment1/models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
-        (model, _, _) = MyNet.load_checkpoint(model_path)
-        model.eval()
+        print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num), flush=True)
 
         if self.optimizer_type == OptimizerType.PYCMA:
             for i in range(len(poses)):
@@ -508,6 +513,7 @@ class MugPipeline():
 
         self.initial_poses = poses
         self.all_poses.append(self.initial_poses)
+        print('appended', flush=True)
 
         # to change for more than one mug
         pose_is_feasible = False
@@ -516,8 +522,11 @@ class MugPipeline():
                 pose_is_feasible = True
 
         if not pose_is_feasible:
-            all_probabilities.append(np.nan)
+            with all_probabilities_lock:
+                all_probabilities.append(np.nan)
             return 1.01
+
+        print('before creating image', flush=True)
 
         # TODO change this, maybe just take in process_num regardless
         if self.optimizer_type == OptimizerType.NELDER_MEAD:
@@ -527,8 +536,24 @@ class MugPipeline():
 
         imagefile += '_color.png'
 
+        print('after creating image', flush=True)
+
+        with model_number_lock:
+            model_path = os.path.join(self.package_directory,
+                '../data/experiment1/models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
+        (model, _, _) = MyNet.load_checkpoint(model_path)
+        model.eval()
+        print('model.eval()', flush=True)
+
         # Run prediction function and obtain predicted class index
         probabilities, is_correct = self.predict_image(model, imagefile)
+
+        # Return probabilities
+        probability = probabilities[self.num_mugs - 1]
+
+        print('iteration: {}, probabilities: {}, probability: {}'.format(
+            iteration_num, probabilities, probability), flush=True)
+        print('      {}'.format(self.initial_poses), flush=True)
 
         folder = os.path.join(self.package_directory, '../data/experiment1')
 
@@ -539,7 +564,7 @@ class MugPipeline():
 
         if not is_correct:
             if self.retrain_with_counterexamples:
-                print('retraining with counterex')
+                print('retraining with counterex', flush=True)
                 # Find {train, test, adversarial} set accuracy
 
                 # Training set is divided into classes
@@ -553,7 +578,7 @@ class MugPipeline():
                     model_number.value += 1
 
                     print('model_number: {}, imagefile: {}, training_set: {}'.format(
-                        model_number.value, imagefile, new_imagefile))
+                        model_number.value, imagefile, new_imagefile), flush=True)
 
                     shutil.copy(imagefile, new_imagefile)
 
@@ -568,15 +593,9 @@ class MugPipeline():
                     new_net.train(num_epochs=50)
             else:
                 # Not retraining, just generating counterexample set
+                os.path.join(counterexample_set_dir, '{}'.format(self.num_mugs))
                 shutil.copy(imagefile, counterexample_set_dir)
                 print('imagefile: {}, counterexample_set: {}'.format(imagefile, counterexample_set_dir))
-
-        # Return probabilities
-        probability = probabilities[self.num_mugs - 1]
-
-        print('iteration: {}, probabilities: {}, probability: {}'.format(
-            iteration_num, probabilities, probability))
-        print('      {}'.format(self.initial_poses))
 
         f = open(self.metadata_filename, "a")
         f.write('\n----------\n')
@@ -584,7 +603,8 @@ class MugPipeline():
             iteration_num, probabilities, probability))
         f.close()
 
-        all_probabilities.append(probability)
+        with all_probabilities_lock:
+            all_probabilities.append(probability)
 
         if file_q:
             res = '{}, {}, {},'.format(process_num, iteration_num, probability)
@@ -608,7 +628,7 @@ class MugPipeline():
                 print('raising FoundCounterexample exception')
                 raise FoundCounterexample
 
-        print('probability: {}'.format(probability))
+        print('probability: {}'.format(probability), flush=True)
         sys.stdout.flush()
 
         return probability

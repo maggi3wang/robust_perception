@@ -121,9 +121,16 @@ class MyNet():
         optimizer = Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
         if os.path.isfile(filename):
+            # device = torch.device("cuda")
+            # model.load_state_dict(torch.load(filename)['state_dict'])
+            # optimizer.load_state_dict(torch.load(filename)['optimizer'])
+
+            # model.to(device)
+
             checkpoint = torch.load(filename)
             start_epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['state_dict'])
+            model.share_memory()
             optimizer.load_state_dict(checkpoint['optimizer'])
 
             # Move model to GPU
