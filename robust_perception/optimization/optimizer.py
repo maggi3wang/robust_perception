@@ -55,7 +55,7 @@ class Optimizer():
             ... TODO
         """
 
-        torch.multiprocessing.set_start_method('spawn')
+        # torch.multiprocessing.set_start_method('spawn')
 
         self.mug_initial_poses = []
 
@@ -197,6 +197,7 @@ class Optimizer():
                     self.total_iterations, self.num_counterexamples,
                     self.model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q),
                     timeout=(self.max_time - elapsed_time))
+                print('after ep', flush=True)
             except torch.multiprocessing.context.TimeoutError:
                 print('timed out!', flush=True)
                 break

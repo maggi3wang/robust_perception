@@ -42,7 +42,7 @@ def main():
     optimizer = Optimizer(
         num_mugs=3, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
         max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
-        num_processes=15, retrain_with_counterexamples=False)
+        num_processes=30, retrain_with_counterexamples=False)
 
     # Run optimizer based on optimizer type
     if optimizer_type == OptimizerType.PYCMA:

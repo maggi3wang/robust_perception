@@ -318,7 +318,7 @@ class MugPipeline():
             # simulator.set_target_realtime_rate(1.0)
             simulator.set_publish_every_time_step(False)
             simulator.Initialize()
-            # print('initialized simulator', flush=True)
+            print('initialized simulator', flush=True)
 
             ik = InverseKinematics(mbp, mbp_context)
             q_dec = ik.q()
@@ -368,7 +368,7 @@ class MugPipeline():
             q0_proj = result.GetSolution(q_dec)
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
-            # print('q0_initial: {}'.format(q0_initial), flush=True)
+            print('q0_initial: {}'.format(q0_initial), flush=True)
 
             converged = False
             t = 0.1
@@ -391,10 +391,11 @@ class MugPipeline():
 
                 if (time.time() - start_time) > 5 * 60:
                     converged = True
-                    print('TIMED OUT IN FORWARD SIMULATION!')
+                    print('TIMED OUT IN FORWARD SIMULATION!', flush=True)
 
+            print('t: {}'.format(t))
             q0_final = mbp.GetPositions(mbp_context).copy()
-            # print('q0_final: {}'.format(q0_final), flush=True)
+            print('q0_final: {}'.format(q0_final), flush=True)
 
             if self.folder_name is None:
                 raise Exception('have not yet set the folder name')
@@ -412,10 +413,6 @@ class MugPipeline():
             self.write_poses_to_file(filename, q0, q0_final)
 
             # print('DONE with iteration {}!'.format(self.iteration_num))
-
-        except Exception as e:
-            print("Unhandled exception ", e, flush=True)
-            raise
 
         except:
             print("Unhandled unnamed exception, probably sim error", flush=True)
@@ -448,7 +445,8 @@ class MugPipeline():
         image_tensor = image_tensor.unsqueeze_(0)
 
         # Turn the input into a Variable
-        input_image = Variable(image_tensor.cuda())
+        # input_image = Variable(image_tensor.cuda())       # todo make use_gpu a var
+        input_image = Variable(image_tensor)
 
         # Predict the class of the image
         # with model_number_lock:
@@ -541,8 +539,10 @@ class MugPipeline():
         with model_number_lock:
             model_path = os.path.join(self.package_directory,
                 '../data/experiment1/models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
-        (model, _, _) = MyNet.load_checkpoint(model_path)
+
+        (model, _, _) = MyNet.load_checkpoint(model_path, use_gpu=False)
         model.eval()
+        
         print('model.eval()', flush=True)
 
         # Run prediction function and obtain predicted class index

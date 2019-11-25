@@ -115,7 +115,7 @@ class MyNet():
             param_group["lr"] = lr
 
     @staticmethod
-    def load_checkpoint(filename):
+    def load_checkpoint(filename, use_gpu=True):
         start_epoch = 0
         model = SimpleNet(num_classes=5)
         optimizer = Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
@@ -127,20 +127,26 @@ class MyNet():
 
             # model.to(device)
 
-            checkpoint = torch.load(filename)
+            if use_gpu:
+                checkpoint = torch.load(filename)
+            else:
+                checkpoint = torch.load(filename, map_location='cpu')
+
             start_epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['state_dict'])
             model.share_memory()
             optimizer.load_state_dict(checkpoint['optimizer'])
 
-            # Move model to GPU
-            model.cuda()
+            if use_gpu:
+                # Move model to GPU
+                model.cuda()
 
-            # Move optimizer to GPU
-            for state in optimizer.state.values():
-                for k,v in state.items():
-                    if isinstance(v, torch.Tensor):
-                        state[k] = v.cuda()
+                # Move optimizer to GPU
+                for state in optimizer.state.values():
+                    for k,v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.cuda()
+
         else:
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), filename)
 
