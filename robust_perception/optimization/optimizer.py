@@ -34,6 +34,7 @@ class OptimizerType(Enum):
     NEVERGRAD = 3
     SLSQP = 4
     NELDER_MEAD = 5
+    NONE = 6
 
 # Local imports
 from ..optimization.eval_parallel import EvalParallel3
@@ -135,9 +136,9 @@ class Optimizer():
         # folder_name = "data_pycma"
 
         if self.retrain_with_counterexamples:
-            folder_name = os.path.join(self.package_directory, '../data/experiment1/run_with_retraining')
+            folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/run_with_retraining')
         else:
-            folder_name = os.path.join(self.package_directory, '../data/experiment1/initial_optimization_run')
+            folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/initial_optimization_run')
 
         self.mug_pipeline.set_folder_name(folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.PYCMA)
@@ -353,23 +354,6 @@ class Optimizer():
         fig2.savefig(os.path.join(self.package_directory, 'probability_plot.png'))
         plt.show()
 
-
-###################################################################################################
-# Potentially useful, but not using atm
-
-    # def run_nevergrad():
-    #     """
-        
-    #     """
-    #     mug_pipeline.set_folder_name("data_nevergrad")
-
-    #     initial_poses = ng.var.Array(1, 7).bounded(-0.5, 0.5)
-    #     instrum = ng.Instrumentation(poses=initial_poses)
-    #     optimizer = ng.optimizers.RandomSearch(instrumentation=instrum, budget=100)
-    #     probability = optimizer.minimize(run_inference)
-    #     print(probability)
-    #     return all_poses, all_probabilities
-
     def run_rbfopt(self):
         """
         Rbfopt
@@ -412,3 +396,19 @@ class Optimizer():
             bounds=mug_bounds, full_output=True, iter=self.max_iterations)
 
         print(exit_mode)
+
+###################################################################################################
+# Potentially useful, but not using atm
+
+    # def run_nevergrad():
+    #     """
+        
+    #     """
+    #     mug_pipeline.set_folder_name("data_nevergrad")
+
+    #     initial_poses = ng.var.Array(1, 7).bounded(-0.5, 0.5)
+    #     instrum = ng.Instrumentation(poses=initial_poses)
+    #     optimizer = ng.optimizers.RandomSearch(instrumentation=instrum, budget=100)
+    #     probability = optimizer.minimize(run_inference)
+    #     print(probability)
+    #     return all_poses, all_probabilities

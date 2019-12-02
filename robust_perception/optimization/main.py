@@ -1,5 +1,6 @@
 from ..optimization.optimizer import OptimizerType
 from ..optimization.optimizer import Optimizer
+from ..optimization.experiments import Experiment
 
 from ..optimization.model_trainer import MyNet
 
@@ -28,37 +29,40 @@ def main():
 
     ## Initial parameters
 
-    # Parameters that are fairly variable
-    optimizer_type = OptimizerType.PYCMA
+    # # Parameters that are fairly variable
+    # optimizer_type = OptimizerType.PYCMA
 
-    max_sec = None
-    max_counterexamples = 200
-    max_iterations = None
+    # max_sec = None
+    # max_counterexamples = 200
+    # max_iterations = None
 
-    # Parameters that are fairly static
-    mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
-    mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
+    # # Parameters that are fairly static
+    # mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
+    # mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
 
-    optimizer = Optimizer(
-        num_mugs=3, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
-        max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
-        num_processes=30, retrain_with_counterexamples=False)
+    # optimizer = Optimizer(
+    #     num_mugs=3, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
+    #     max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
+    #     num_processes=30, retrain_with_counterexamples=False)
 
-    # Run optimizer based on optimizer type
-    if optimizer_type == OptimizerType.PYCMA:
-        optimizer.run_pycma()
-        optimizer.plot_graphs()
-    elif optimizer_type == OptimizerType.RBFOPT:
-        optimizer.run_rbfopt()
-        optimizer.plot_graphs()
-    elif optimizer_type == OptimizerType.NEVERGRAD:
-        optimizer.plot_graphs(optimizer.run_nevergrad())
-    elif optimizer_type == OptimizerType.SLSQP:
-        optimizer.run_scipy_fmin_slsqp()
-        optimizer.plot_graphs()
-    elif optimizer_type == OptimizerType.NELDER_MEAD:
-        optimizer.run_scipy_nelder_mead()
-        optimizer.plot_graphs()
+    # # Run optimizer based on optimizer type
+    # if optimizer_type == OptimizerType.PYCMA:
+    #     optimizer.run_pycma()
+    #     optimizer.plot_graphs()
+    # elif optimizer_type == OptimizerType.RBFOPT:
+    #     optimizer.run_rbfopt()
+    #     optimizer.plot_graphs()
+    # elif optimizer_type == OptimizerType.NEVERGRAD:
+    #     optimizer.plot_graphs(optimizer.run_nevergrad())
+    # elif optimizer_type == OptimizerType.SLSQP:
+    #     optimizer.run_scipy_fmin_slsqp()
+    #     optimizer.plot_graphs()
+    # elif optimizer_type == OptimizerType.NELDER_MEAD:
+    #     optimizer.run_scipy_nelder_mead()
+    #     optimizer.plot_graphs()
+
+    experiment = Experiment(num_mugs=3)
+    experiment.run_experiment()
 
 if __name__ == "__main__":
     main()

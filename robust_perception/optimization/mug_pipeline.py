@@ -58,6 +58,7 @@ import torch.nn as nn
 import pycuda.driver as cuda
 from torchvision.transforms import transforms
 from torch.autograd import Variable
+from torch.multiprocessing import Process, Pool, Queue, Manager, Lock, Value
 import requests
 import shutil
 from io import open, BytesIO
@@ -90,19 +91,19 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         self.rgb_image_input_port = \
             self.DeclareAbstractInputPort("rgb_image_input_port",
                 AbstractValue.Make(PydrakeImage[PixelType.kRgba8U](640, 480, 3)))
-        self.label_image_input_port = \
-            self.DeclareAbstractInputPort("label_image_input_port",
-                AbstractValue.Make(PydrakeImage[PixelType.kLabel16I](640, 480, 1)))
+        # self.label_image_input_port = \
+        #     self.DeclareAbstractInputPort("label_image_input_port",
+        #         AbstractValue.Make(PydrakeImage[PixelType.kLabel16I](640, 480, 1)))
 
         self.color_image = None
-        self.label_image = None
+        # self.label_image = None
 
     def DoPublish(self, context, event):
         """
         Update color_image and label_image for saving
         """
         self.color_image = self.EvalAbstractInput(context, 0).get_value()
-        self.label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
+        # self.label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
 
     def save_image(self, filename):
         """
@@ -114,11 +115,11 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         color_fig.axes.get_yaxis().set_visible(False)
         plt.savefig(filename + '_color.png', bbox_inches='tight', pad_inches=0)
 
-        label_fig = plt.imshow(np.squeeze(self.label_image.data))
-        plt.axis('off')
-        label_fig.axes.get_xaxis().set_visible(False)
-        label_fig.axes.get_yaxis().set_visible(False)
-        plt.savefig(filename + '_label.png', bbox_inches='tight', pad_inches=0)
+        # label_fig = plt.imshow(np.squeeze(self.label_image.data))
+        # plt.axis('off')
+        # label_fig.axes.get_xaxis().set_visible(False)
+        # label_fig.axes.get_yaxis().set_visible(False)
+        # plt.savefig(filename + '_label.png', bbox_inches='tight', pad_inches=0)
 
 def blockPrint():
     """
@@ -135,7 +136,7 @@ def enablePrint():
 
 class MugPipeline():
 
-    def __init__(self, num_mugs, max_counterexamples, retrain_with_counterexamples):
+    def __init__(self, num_mugs, max_counterexamples=1000000, retrain_with_counterexamples=False):
         self.num_mugs = num_mugs
         self.initial_poses = None
         self.max_counterexamples = max_counterexamples
@@ -155,6 +156,8 @@ class MugPipeline():
         self.meshcat_visualizer_desired = False
 
         self.retrain_with_counterexamples = retrain_with_counterexamples
+        self.is_correct = False
+        self.softmax_probabilities = []
 
         if torch.cuda.is_available():
             cuda.init()
@@ -297,8 +300,8 @@ class MugPipeline():
             camera_viz = builder.AddSystem(rgb_and_label_image_visualizer)
             builder.Connect(camera.color_image_output_port(),
                             camera_viz.get_input_port(0))
-            builder.Connect(camera.label_image_output_port(),
-                            camera_viz.get_input_port(1))
+            # builder.Connect(camera.label_image_output_port(),
+            #                 camera_viz.get_input_port(1))
 
             diagram = builder.Build()
 
@@ -318,7 +321,7 @@ class MugPipeline():
             # simulator.set_target_realtime_rate(1.0)
             simulator.set_publish_every_time_step(False)
             simulator.Initialize()
-            print('initialized simulator', flush=True)
+            # print('initialized simulator', flush=True)
 
             ik = InverseKinematics(mbp, mbp_context)
             q_dec = ik.q()
@@ -368,7 +371,7 @@ class MugPipeline():
             q0_proj = result.GetSolution(q_dec)
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
-            print('q0_initial: {}'.format(q0_initial), flush=True)
+            # print('q0_initial: {}'.format(q0_initial), flush=True)
 
             converged = False
             t = 0.1
@@ -393,9 +396,9 @@ class MugPipeline():
                     converged = True
                     print('TIMED OUT IN FORWARD SIMULATION!', flush=True)
 
-            print('t: {}'.format(t))
+            # print('t: {}'.format(t))
             q0_final = mbp.GetPositions(mbp_context).copy()
-            print('q0_final: {}'.format(q0_final), flush=True)
+            # print('q0_final: {}'.format(q0_final), flush=True)
 
             if self.folder_name is None:
                 raise Exception('have not yet set the folder name')
@@ -419,6 +422,12 @@ class MugPipeline():
             raise
 
         return filename
+
+    def get_is_correct(self):
+        return self.is_correct
+
+    def get_softmax_probabilities(self):
+        return self.softmax_probabilities
 
     def predict_image(self, model, image_path):
         # print('in predict_image image_path: {}'.format(image_path))
@@ -479,12 +488,17 @@ class MugPipeline():
                 classes[index], self.num_mugs))
             f.close()
 
+        self.is_correct = is_correct
+        self.softmax_probabilities = probabilities.data.cpu().numpy()[0]
         return probabilities.data.cpu().numpy()[0], is_correct
 
-    def run_inference(self, poses, iteration_num, all_probabilities=None,
-            total_iterations=None, num_counterexamples=None,
-            model_number=0, model_number_lock=None, counter_lock=None, all_probabilities_lock=None,
-            file_q=None):
+    def get_iteration_num(self):
+        return self.iteration_num
+
+    def run_inference(self, poses, iteration_num, all_probabilities=[],
+            total_iterations=Manager().Value('d', 0), num_counterexamples=Manager().Value('d', 0),
+            model_number=Manager().Value('d', 0), model_number_lock=Lock(), counter_lock=Lock(), all_probabilities_lock=Lock(),
+            file_q=None, return_is_correct=False):
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
@@ -500,6 +514,9 @@ class MugPipeline():
         if self.optimizer_type == OptimizerType.NELDER_MEAD:
             iteration_num = self.iteration_num
 
+        if self.optimizer_type == OptimizerType.NONE:
+            self.iteration_num = iteration_num
+
         print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num), flush=True)
 
         if self.optimizer_type == OptimizerType.PYCMA:
@@ -511,7 +528,7 @@ class MugPipeline():
 
         self.initial_poses = poses
         self.all_poses.append(self.initial_poses)
-        print('appended', flush=True)
+        # print('appended', flush=True)
 
         # to change for more than one mug
         pose_is_feasible = False
@@ -524,7 +541,7 @@ class MugPipeline():
                 all_probabilities.append(np.nan)
             return 1.01
 
-        print('before creating image', flush=True)
+        # print('before creating image', flush=True)
 
         # TODO change this, maybe just take in process_num regardless
         if self.optimizer_type == OptimizerType.NELDER_MEAD:
@@ -534,16 +551,16 @@ class MugPipeline():
 
         imagefile += '_color.png'
 
-        print('after creating image', flush=True)
+        # print('after creating image', flush=True)
 
         with model_number_lock:
             model_path = os.path.join(self.package_directory,
-                '../data/experiment1/models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
+                '../data/experiment4_dist/models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
 
         (model, _, _) = MyNet.load_checkpoint(model_path, use_gpu=False)
         model.eval()
-        
-        print('model.eval()', flush=True)
+
+        # print('model.eval()', flush=True)
 
         # Run prediction function and obtain predicted class index
         probabilities, is_correct = self.predict_image(model, imagefile)
@@ -555,7 +572,7 @@ class MugPipeline():
             iteration_num, probabilities, probability), flush=True)
         print('      {}'.format(self.initial_poses), flush=True)
 
-        folder = os.path.join(self.package_directory, '../data/experiment1')
+        folder = os.path.join(self.package_directory, '../data/experiment4_dist')
 
         training_set_dir = os.path.join(folder, 'training_set')
         test_set_dir = os.path.join(folder, 'test_set')
@@ -628,7 +645,15 @@ class MugPipeline():
                 print('raising FoundCounterexample exception')
                 raise FoundCounterexample
 
+        # if self.optimizer_type == OptimizerType.NONE:
+        #     if not is_correct:
+        #         print('raising FoundCounterexample exception')
+        #         raise FoundCounterexample
+
         print('probability: {}'.format(probability), flush=True)
         sys.stdout.flush()
+
+        if return_is_correct:
+            return probability, is_correct
 
         return probability

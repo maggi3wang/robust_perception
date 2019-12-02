@@ -38,7 +38,7 @@ class Experiment():
 
 
     def run_experiment(self):
-        k = 1000        # this is num_samples - 1
+        k = 2000        # this is num_samples - 1
 
         pose_k = [0.59511603, 0.19362723, -0.65069286, 0.43005140, -0.07855161, 0.04501751, 0.16365936, 
             0.04717458, 0.55405918, -0.25733543, -0.79029834, -0.07334251, -0.06119629, 0.14028863, 
@@ -46,22 +46,21 @@ class Experiment():
 
         # Use parallelized processes to find counterex pose
         # pose_k = []     # will change pose_k to be counterexample pose
-        found_counterex = False
 
         mug_pipeline = MugPipeline(num_mugs=self.num_mugs)
 
         # folder_name = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-        #    '../data/experiment1/find_counterexample')
+        #    '../data/experiment4/find_counterexample')
         # mug_pipeline.set_folder_name(folder_name)
         mug_pipeline.set_optimizer_type(OptimizerType.NONE)
 
-        num_processes = 20
+        num_processes = 22
         pool = Pool(processes=num_processes)
         manager = Manager()
         model_number = manager.Value('d', 0)
         # iter_num = 0
 
-        # while not found_counterex:
+        # while True:
         #     sample_pose_ks = []
         #     for i in range(num_processes):
         #         pose = []
@@ -71,25 +70,19 @@ class Experiment():
         #         sample_pose_ks.append(pose)
 
         #     lst = range(iter_num, iter_num + num_processes)
-        #     jobs = [pool.apply_async(self.run_inference, (pose, i, mug_pipeline)) for pose, i in zip(sample_pose_ks, lst)]
+        #     results = pool.starmap(mug_pipeline.run_inference, zip(sample_pose_ks, lst))
 
-        #     for job in jobs:
-        #         try:
-        #             job.get()
-        #         except BaseException:
+        #     for i, result in enumerate(results):
+        #         probability, is_correct = result
+
+        #         if not is_correct:
         #             counterex_iter_num = mug_pipeline.get_iteration_num()
         #             print('counterex_iter_num', counterex_iter_num)
-        #             pose_k = sample_pose_ks[counterex_iter_num % num_processes]
+        #             assert(counterex_iter_num == iter_num + i)
+        #             pose_k = sample_pose_ks[i]
         #             break
 
         #     iter_num += num_processes
-        #     # pose_k = []
-        #     # for x in range(self.num_mugs):
-        #     #     pose_k.extend(RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
-        #     #         [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)])
-
-        #     # pose_k_probability = mug_pipeline.run_inference(pose_k, k)
-        #     # found_counterex = not(mug_pipeline.get_is_correct())
 
         # print('iter_num', iter_num)
 
@@ -110,7 +103,7 @@ class Experiment():
         pose_diff = pose_k - pose_0
 
         folder_name = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-            '../data/experiment1/initial_optimization_run')
+            '../data/experiment4_dist/initial_optimization_run')
         mug_pipeline.set_folder_name(folder_name)
 
         i = 0
@@ -137,11 +130,13 @@ class Experiment():
         plt.close()
         fig2, ax = plt.subplots()
         print(a_list, probability_list)
-        ax.scatter(range(0, len(a_list)), probability_list, markersize=10)
+        fig2.set_figheight(8)
+        fig2.set_figwidth(16)
+        ax.plot(range(0, len(a_list)), probability_list, '-o', linewidth=0.4, markersize=2)
         ax.set(xlabel='Iteration', ylabel='Probability')
-        ax.set_xlim(xmin=0, xmax=1)
+        ax.set_xlim(xmin=0, xmax=len(a_list))
         ax.set_ylim(ymin=0.0, ymax=1.0)
         ax.grid()
         fig2.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-            '../data/experiment1/initial_optimization_run/probability_plot.png'))
+            '../data/experiment4_dist/initial_optimization_run/probability_plot.png'))
         plt.show()
