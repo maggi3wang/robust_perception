@@ -231,20 +231,32 @@ class Optimizer():
     ## Local optimizers
 
     @staticmethod
-    def run_nelder_mead_helper(process_num, mug_pipeline, num_mugs, all_probabilities,
+    def run_local_optimizer_helper(local_optimizer_method, process_num, mug_pipeline, num_mugs, all_probabilities,
             total_iterations, num_counterexamples, model_number, model_number_lock,
             counter_lock, all_probabilities_lock, file_q, use_input_initial_poses, mug_initial_poses,
             respawn_when_counterex):
 
-        mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
-        mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
+        bounds = []
+        method = ''
+        if local_optimizer_method == OptimizerType.NELDER_MEAD:
+            mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
+            mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
 
-        mug_lower_bounds = []
-        mug_upper_bounds = []
+            mug_lower_bounds = []
+            mug_upper_bounds = []
 
-        for i in range(0, 3):
-            mug_lower_bounds += mug_lower_bound
-            mug_upper_bounds += mug_upper_bound
+            for i in range(0, 3):
+                mug_lower_bounds += mug_lower_bound
+                mug_upper_bounds += mug_upper_bound
+
+            bounds = (mug_lower_bounds, mug_upper_bounds)
+            method = 'Nelder-Mead'
+        elif local_optimizer_method == OptimizerType.SLSQP:
+            mug_bound = [(-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-0.1, 0.1), (-0.1, 0.1), (0.1, 0.2)]
+
+            for i in range(0, 3):
+                bounds += mug_bound
+            method = 'SLSQP'
 
         while True:
             try:
@@ -262,7 +274,7 @@ class Optimizer():
                     args=(process_num, all_probabilities, total_iterations, num_counterexamples,
                         model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q,
                         False, respawn_when_counterex),
-                    bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
+                    bounds=bounds, method=method,
                     options={'disp': True})
             except FoundCounterexample:
                 # After we find a counterex, get new mug initial pose and restart optimizer
@@ -271,11 +283,13 @@ class Optimizer():
                     mug_initial_poses += \
                         RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
                         [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
-                # TODO put this in a lock
-                Optimizer.highest_process_num += 1
-                process_num = Optimizer.highest_process_num - 1
+                with counter_lock:
+                    Optimizer.highest_process_num += 1
+                    process_num = Optimizer.highest_process_num
+                mug_pipeline.iteration_num = 0
 
-    def run_nelder_mead(self, use_input_initial_poses=False, respawn_when_counterex=False):
+    def run_local_optimizer(self, local_optimizer_method,
+            use_input_initial_poses=False, respawn_when_counterex=True):
         """
         For local search methods, we want to create n parallel processes with random initial poses.
         Each time the process finds a counter example, kill the current process and spawn a
@@ -304,10 +318,15 @@ class Optimizer():
         all_probabilities_lock = manager.Lock()
 
         file_q = manager.Queue()
+        folder_name = ''
 
-        folder_name = os.path.join(self.package_directory, "../data/optimization_comparisons/nelder_mead")
+        if local_optimizer_method == OptimizerType.NELDER_MEAD:
+            folder_name = os.path.join(self.package_directory, "../data/optimization_comparisons/nelder_mead")
+        elif local_optimizer_method == OptimizerType.SLSQP:
+            folder_name = os.path.join(self.package_directory, "../data/optimization_comparisons/slsqp")
+
         self.mug_pipeline.set_folder_name(folder_name)
-        self.mug_pipeline.set_optimizer_type(OptimizerType.NELDER_MEAD)
+        self.mug_pipeline.set_optimizer_type(local_optimizer_method)
 
         pool = Pool(self.num_processes + 1)
 
@@ -321,8 +340,9 @@ class Optimizer():
 
         try:
             result = func_timeout(self.max_time, pool.starmap,
-                args=(self.run_nelder_mead_helper,
-                zip(range(self.num_processes), repeat(self.mug_pipeline), repeat(self.num_mugs),
+                args=(self.run_local_optimizer_helper,
+                zip(repeat(local_optimizer_method),
+                    range(self.num_processes), repeat(self.mug_pipeline), repeat(self.num_mugs),
                     repeat(self.all_probabilities), repeat(self.total_iterations),
                     repeat(num_counterexamples),
                     repeat(model_number), repeat(model_number_lock),
@@ -345,188 +365,6 @@ class Optimizer():
 
         sys.stdout.flush()
 
-    # SLSQP
-
-    @staticmethod
-    def run_slsqp_helper(process_num, mug_pipeline, num_mugs, all_probabilities,
-            total_iterations, num_counterexamples, model_number, model_number_lock,
-            counter_lock, all_probabilities_lock, file_q, use_input_initial_poses, mug_initial_poses,
-            respawn_when_counterex):
-
-        mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
-        mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
-
-        mug_lower_bounds = []
-        mug_upper_bounds = []
-
-        for i in range(0, 3):
-            mug_lower_bounds += mug_lower_bound
-            mug_upper_bounds += mug_upper_bound
-        mug_bound = [(-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-0.1, 0.1), (-0.1, 0.1), (0.1, 0.2)]
-
-        mug_bounds = []
-        for i in range(0, 3):
-            mug_bounds += mug_bound
-
-        while True:
-            try:
-                folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), mug_pipeline.get_folder_name())
-                print(folder)
-                folder = '{}/optimization_run/{:03d}'.format(folder, process_num)
-
-                if not os.path.exists(folder):
-                    print('creating folder')
-                    os.mkdir(folder)
-
-                assert(os.path.exists(folder))
-
-                optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, 
-                    args=(process_num, all_probabilities, total_iterations, num_counterexamples,
-                        model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q,
-                        False, respawn_when_counterex),
-                    bounds=mug_bounds, method='SLSQP',
-                    options={'disp': True})
-            except FoundCounterexample:
-                # After we find a counterex, get new mug initial pose and restart optimizer
-                mug_initial_poses = []
-                for i in range(num_mugs):
-                    mug_initial_poses += \
-                        RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
-                        [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
-                # TODO put this in a lock
-                Optimizer.highest_process_num += 1
-                process_num = Optimizer.highest_process_num - 1
-
-    def run_slsqp(self, use_input_initial_poses=False, respawn_when_counterex=False):
-        """
-        For local search methods, we want to create n parallel processes with random initial poses.
-        Each time the process finds a counter example, kill the current process and spawn a
-        new process; this allows us to find counter exs that are dissimilar to each other.
-        """
-        
-        mug_initial_poses = []
-
-        if use_input_initial_poses:
-            mug_initial_poses = self.mug_initial_poses
-        else:
-            for i in range(self.num_mugs):
-                mug_initial_poses += \
-                    RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
-                    [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
-
-        start_time = time.time()
-
-        manager = Manager()
-        self.all_probabilities = manager.list()
-        self.total_iterations = manager.Value('d', 0)
-        num_counterexamples = manager.Value('d', 0)
-        model_number = manager.Value('d', 0)
-        model_number_lock = manager.Lock()
-        counter_lock = manager.Lock()
-        all_probabilities_lock = manager.Lock()
-
-        file_q = manager.Queue()
-
-        folder_name = os.path.join(self.package_directory, "../data/optimization_comparisons/slsqp")
-        self.mug_pipeline.set_folder_name(folder_name)
-        self.mug_pipeline.set_optimizer_type(OptimizerType.NELDER_MEAD)
-
-        pool = Pool(self.num_processes + 1)
-
-        # filename = '{}/results.csv'.format(folder_name)
-        # print('filename', filename)
-        # watcher = pool.apply_async(self.listener, (file_q, filename))
-
-        filename = '{}/results.csv'.format(folder_name)
-        watcher = Process(target=self.listener, args=(file_q, filename))
-        watcher.start()
-
-        try:
-            result = func_timeout(self.max_time, pool.starmap,
-                args=(self.run_slsqp_helper,
-                zip(range(self.num_processes), repeat(self.mug_pipeline), repeat(self.num_mugs),
-                    repeat(self.all_probabilities), repeat(self.total_iterations),
-                    repeat(num_counterexamples),
-                    repeat(model_number), repeat(model_number_lock),
-                    repeat(counter_lock), repeat(all_probabilities_lock),
-                    repeat(file_q), repeat(use_input_initial_poses), repeat(mug_initial_poses),
-                    repeat(respawn_when_counterex))))
-        except FunctionTimedOut:
-            elapsed_time = time.time() - start_time
-            print('ran for {} minutes! total number of iterations is {}, with {} sec/image'.format(
-                elapsed_time/60.0, self.total_iterations.value,
-                elapsed_time/self.total_iterations.value))
-
-            file_q.put('kill')
-            pool.terminate()
-            pool.join()
-
-        end_time = time.time()
-
-        print('probabilities:', self.all_probabilities)
-
-        sys.stdout.flush()
-
-    # @staticmethod
-    # def run_scipy_fmin_slsqp_helper(mug_pipeline, mug_initial_poses, mug_bounds, all_probabilities, file_q, max_iterations):
-    #     exit_mode = optimize.fmin_slsqp(mug_pipeline.run_inference, mug_initial_poses,
-    #         bounds=mug_bounds, args=(all_probabilities=all_probabilities, file_q=file_q, increment_iteration_num=True),
-    #         full_output=True, iter=max_iterations)
-    #     return exit_mode
-
-    # def run_scipy_fmin_slsqp(self, use_input_initial_poses=False):
-    #     """
-    #         Local optimization (sequential least square programming)
-    #     """
-    #     folder_name = os.path.join(self.package_directory, '../data/optimization_comparisons/slsqp/optimization_run')
-
-    #     self.mug_pipeline.set_folder_name(folder_name)
-    #     self.mug_pipeline.set_optimizer_type(OptimizerType.SLSQP)
-
-    #     mug_initial_poses = []
-
-    #     if use_input_initial_poses:
-    #         mug_initial_poses = self.mug_initial_poses
-    #     else:
-    #         for i in range(self.num_mugs):
-    #             mug_initial_poses += \
-    #                 RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
-    #                 [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
-
-    #     mug_bound = [(-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-0.1, 0.1), (-0.1, 0.1), (0.1, 0.2)]
-
-    #     mug_bounds = []
-    #     for i in range(0, 3):
-    #         mug_bounds += mug_bound
-
-    #     all_probabilities = []
-
-    #     manager = Manager()
-    #     file_q = manager.Queue()
-
-    #     filename = '{}/results.csv'.format(folder_name)
-    #     watcher = Process(target=self.listener, args=(file_q, filename))
-    #     watcher.start()
-
-    #     # exit_mode = optimize.fmin_slsqp(self.mug_pipeline.run_inference, mug_initial_poses,
-    #         # bounds=mug_bounds, args=(all_probabilities, file_q),
-    #         # full_output=True, iter=self.max_iterations)
-    #     exit_mode = self.run_scipy_fmin_slsqp_helper(
-    #         self.mug_pipeline, mug_initial_poses, mug_bounds, all_probabilities, file_q, self.max_iterations)
-
-    #     # try:
-    #     #     exit_mode = func_timeout(self.max_time, optimize.fmin_slsqp,
-    #     #         args=(self.mug_pipeline.run_inference, mug_initial_poses,
-    #     #             bounds=mug_bounds, 
-    #     #             args=(all_probabilities=all_probabilities, file=file_q),
-    #     #             full_output=True, iter=self.max_iterations))
-    #     # except FunctionTimedOut:
-    #     #     print('fmin_slsqp finished in {} seconds'.format(self.max_time))
-    #     # except Exception as e:
-    #     #     print('exception {} was thrown'.format(e))
-
-    #     print(exit_mode)
-    #     print(all_probabilities)
 
     ## Metadata and visualization tools
 
@@ -537,7 +375,9 @@ class Optimizer():
         """
         with open(filename, 'w') as f:
             print('opened {}'.format(filename))
-            f.write('process_num, iter_num, probability\n')
+            f.write('process_num, iter_num, '
+                'probability_1, probability_2, probability_3, probability_4, probability_5, '
+                'is_correct, time,\n')
             while 1:
                 m = q.get()
                 if m == 'kill':

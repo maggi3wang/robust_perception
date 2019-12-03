@@ -528,7 +528,8 @@ class MugPipeline():
             raise ValueError('Need to set optimizer type before running inference')
 
         process_num = iteration_num
-        if self.optimizer_type == OptimizerType.NELDER_MEAD:
+        if (self.optimizer_type == OptimizerType.NELDER_MEAD or
+                self.optimizer_type == OptimizerType.SLSQP):
             iteration_num = self.iteration_num
 
         if self.optimizer_type == OptimizerType.RANDOM:
@@ -562,13 +563,18 @@ class MugPipeline():
 
         # TODO change this, maybe just take in process_num regardless
         try:
-            if self.optimizer_type == OptimizerType.NELDER_MEAD:
-                # WRAP THIS IN TRY EXCEPT
+            if (self.optimizer_type == OptimizerType.NELDER_MEAD or
+                    self.optimizer_type == OptimizerType.SLSQP):
                 imagefile = self.create_image(iteration_num, process_num)
             else:
                 imagefile = self.create_image(iteration_num)
-        except:
-            print('EXCEPTION, returning 1.01')
+        except Exception as e:
+            if file_q:
+                res = '{:05d}, {:05d}, {}, , , , , , {},'.format(
+                    process_num, iteration_num, type(e).__name__, time.time())
+                file_q.put(res)
+
+            print('EXCEPTION {}, returning 1.01'.format(type(e).__name__))
             return 1.01
 
         imagefile += '_color.png'
@@ -648,7 +654,10 @@ class MugPipeline():
             all_probabilities.append(probability)
 
         if file_q:
-            res = '{}, {}, {},'.format(process_num, iteration_num, probability)
+            res = '{:05d}, {:05d}, {:1.6f}, {:1.6f}, {:1.6f}, {:1.6f}, {:1.6f}, {:1d}, {},'.format(
+                process_num, iteration_num, 
+                probabilities[0], probabilities[1], probabilities[2], probabilities[3], probabilities[4],
+                is_correct, time.time())
             file_q.put(res)
 
         with counter_lock:
@@ -662,10 +671,11 @@ class MugPipeline():
                 print('found {} counterexamples'.format(num_counterexamples.value))
                 raise FoundMaxCounterexamples
 
-        if self.optimizer_type == OptimizerType.NELDER_MEAD:
+        if (self.optimizer_type == OptimizerType.NELDER_MEAD or
+                self.optimizer_type == OptimizerType.SLSQP):
             self.iteration_num += 1
 
-            if not is_correct:
+            if not is_correct and respawn_when_counterex:
                 print('raising FoundCounterexample exception')
                 raise FoundCounterexample
 
