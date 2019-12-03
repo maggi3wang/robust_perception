@@ -81,6 +81,12 @@ class FoundCounterexample(Exception):
 class FoundMaxCounterexamples(Exception):
     pass
 
+class ForwardSimulationTimedOut(Exception):
+    pass
+
+class NotConstrained(Exception):
+    pass
+
 class RgbAndLabelImageVisualizer(LeafSystem):
     def __init__(self, draw_timestep=0.033333):
         LeafSystem.__init__(self)
@@ -231,195 +237,200 @@ class MugPipeline():
         random.seed(46)
         filename = ''
 
-        try:
-            builder = DiagramBuilder()
-            mbp, scene_graph = AddMultibodyPlantSceneGraph(
-                builder, MultibodyPlant(time_step=0.0001))
-            renderer_params = RenderEngineVtkParams()
-            scene_graph.AddRenderer("renderer", MakeRenderEngineVtk(renderer_params))
+        builder = DiagramBuilder()
+        mbp, scene_graph = AddMultibodyPlantSceneGraph(
+            builder, MultibodyPlant(time_step=0.0001))
+        renderer_params = RenderEngineVtkParams()
+        scene_graph.AddRenderer("renderer", MakeRenderEngineVtk(renderer_params))
 
-            # Add ground
-            world_body = mbp.world_body()
-            ground_shape = Box(2., 2., 2.)
-            ground_body = mbp.AddRigidBody("ground", SpatialInertia(
-                mass=10.0, p_PScm_E=np.array([0., 0., 0.]),
-                G_SP_E=UnitInertia(1.0, 1.0, 1.0)))
+        # Add ground
+        world_body = mbp.world_body()
+        ground_shape = Box(2., 2., 2.)
+        ground_body = mbp.AddRigidBody("ground", SpatialInertia(
+            mass=10.0, p_PScm_E=np.array([0., 0., 0.]),
+            G_SP_E=UnitInertia(1.0, 1.0, 1.0)))
+        
+        mbp.WeldFrames(world_body.body_frame(), ground_body.body_frame(),
+                       RigidTransform(Isometry3(rotation=np.eye(3), translation=[0, 0, -1])))
+        mbp.RegisterVisualGeometry(
+            ground_body, RigidTransform.Identity(), ground_shape, "ground_vis",
+            np.array([0.5, 0.5, 0.5, 1.]))
+        mbp.RegisterCollisionGeometry(
+            ground_body, RigidTransform.Identity(), ground_shape, "ground_col",
+            CoulombFriction(0.9, 0.8))
+
+        parser = Parser(mbp, scene_graph)
+
+        os.path.join(self.package_directory, '../image_classification/')
+
+        candidate_model_files = [
+            os.path.join(self.package_directory, '../dataset_generation/mug_clean/mug.urdf')
+        ]
+
+        n_objects = self.num_mugs
+        poses = []  # [quat, pos]
+        classes = []
+        for k in range(n_objects):
+            model_name = "model_%d" % k
+            model_ind = np.random.randint(0, len(candidate_model_files))
+            class_path = candidate_model_files[model_ind]
+            classes.append(class_path)
+            parser.AddModelFromFile(class_path, model_name=model_name)
+            poses.append(
+                [np.array(
+                    [self.initial_poses[7*k + 0], self.initial_poses[7*k + 1],
+                    self.initial_poses[7*k + 2], self.initial_poses[7*k + 3]]),
+                    self.initial_poses[7*k + 4], self.initial_poses[7*k + 5],
+                    self.initial_poses[7*k + 6]])
+
+        mbp.Finalize()
+
+        # print('poses: {}'.format(poses), flush=True)
+
+        if self.meshcat_visualizer_desired:
+            self.run_meshcat_visualizer(builder, scene_graph, visualizer)
+
+        # Add camera
+        depth_camera_properties = DepthCameraProperties(
+            width=1000, height=1000, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
+        parent_frame_id = scene_graph.world_frame_id()
+        camera_tf = RigidTransform(p=[0.0, 0.0, 0.95], rpy=RollPitchYaw([0, np.pi, 0]))
+        camera = builder.AddSystem(
+            RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=False))
+        camera.DeclarePeriodicPublish(0.1, 0.)
+        builder.Connect(scene_graph.get_query_output_port(),
+                        camera.query_object_input_port())
+
+        rgb_and_label_image_visualizer = RgbAndLabelImageVisualizer(draw_timestep=0.1)
+        camera_viz = builder.AddSystem(rgb_and_label_image_visualizer)
+        builder.Connect(camera.color_image_output_port(),
+                        camera_viz.get_input_port(0))
+        # builder.Connect(camera.label_image_output_port(),
+        #                 camera_viz.get_input_port(1))
+
+        diagram = builder.Build()
+
+        diagram_context = diagram.CreateDefaultContext()
+        mbp_context = diagram.GetMutableSubsystemContext(
+            mbp, diagram_context)
+        sg_context = diagram.GetMutableSubsystemContext(
+            scene_graph, diagram_context)
+
+        q0 = mbp.GetPositions(mbp_context).copy()
+        for k in range(len(poses)):
+            offset = k*7
+            q0[(offset):(offset+4)] = poses[k][0]
+            q0[(offset+4):(offset+7)] = poses[k][1]
+
+        simulator = Simulator(diagram, diagram_context)
+        # simulator.set_target_realtime_rate(1.0)
+        simulator.set_publish_every_time_step(False)
+        simulator.Initialize()
+        # print('initialized simulator', flush=True)
+
+        ik = InverseKinematics(mbp, mbp_context)
+        q_dec = ik.q()
+        prog = ik.get_mutable_prog()
+
+        def squaredNorm(x):
+            return np.array([x[0] ** 2 + x[1] ** 2 + x[2] ** 2 + x[3] ** 2])
+
+        for k in range(len(poses)):
+            # Quaternion norm
+            prog.AddConstraint(
+                squaredNorm, [1], [1], q_dec[(k*7):(k*7+4)])
+            # Trivial quaternion bounds
+            prog.AddBoundingBoxConstraint(
+                -np.ones(4), np.ones(4), q_dec[(k*7):(k*7+4)])
+            # Conservative bounds on on XYZ
+            prog.AddBoundingBoxConstraint(
+                np.array([-2., -2., -2.]), np.array([2., 2., 2.]),
+                q_dec[(k*7+4):(k*7+7)])
+
+        def vis_callback(x):
+            mbp.SetPositions(mbp_context, x)
+            global pose_bundle
+            pose_bundle = scene_graph.get_pose_bundle_output_port().Eval(sg_context)
+
+        prog.AddVisualizationCallback(vis_callback, q_dec)
+        prog.AddQuadraticErrorCost(np.eye(q0.shape[0])*1.0, q0, q_dec)
+
+        ik.AddMinimumDistanceConstraint(0.001, threshold_distance=1.0)
+        
+        prog.SetInitialGuess(q_dec, q0)
+        start_time = time.time()
+        solver = SnoptSolver()
+        sid = solver.solver_type()
+        # prog.SetSolverOption(sid, "Print file", "test.snopt")
+        prog.SetSolverOption(sid, "Major feasibility tolerance", 1e-3)
+        prog.SetSolverOption(sid, "Major optimality tolerance", 1e-2)
+        prog.SetSolverOption(sid, "Minor feasibility tolerance", 1e-3)
+        prog.SetSolverOption(sid, "Scale option", 0)
+
+        # print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
+        # print(type(prog))
+        result = mp.Solve(prog)
+        # print("Solve info: {}".format(result), flush=True)
+        # print("Solved in %f seconds" % (time.time() - start_time))
+        # print(result.get_solver_id().name())
+        q0_proj = result.GetSolution(q_dec)
+        mbp.SetPositions(mbp_context, q0_proj)
+        q0_initial = q0_proj.copy()
+        # print('q0_initial: {}'.format(q0_initial), flush=True)
+
+        converged = False
+        t = 0.1
+
+        start_time = time.time()
+
+        while not converged:
+            simulator.AdvanceTo(t)
+            t += 0.0001
             
-            mbp.WeldFrames(world_body.body_frame(), ground_body.body_frame(),
-                           RigidTransform(Isometry3(rotation=np.eye(3), translation=[0, 0, -1])))
-            mbp.RegisterVisualGeometry(
-                ground_body, RigidTransform.Identity(), ground_shape, "ground_vis",
-                np.array([0.5, 0.5, 0.5, 1.]))
-            mbp.RegisterCollisionGeometry(
-                ground_body, RigidTransform.Identity(), ground_shape, "ground_col",
-                CoulombFriction(0.9, 0.8))
+            velocities = mbp.GetVelocities(mbp_context)
+            # print(velocities)
+            # print('t: {:10.4f}, norm: {:10.4f}, x: {:10.4f}, y: {:10.4f}, z: {:10.4f}'.format(
+            #     t, np.linalg.norm(velocities), velocities[0], velocities[1], velocities[2]))
 
-            parser = Parser(mbp, scene_graph)
+            if np.linalg.norm(velocities) < 0.05:
+                converged = True
 
-            os.path.join(self.package_directory, '../image_classification/')
+            # If haven't timed out in 5 min, just set converged = True
 
-            candidate_model_files = [
-                os.path.join(self.package_directory, '../dataset_generation/mug_clean/mug.urdf')
-            ]
+            if (time.time() - start_time) > 5 * 60:
+                converged = True
+                print('TIMED OUT IN FORWARD SIMULATION!', flush=True)
+                raise ForwardSimulationTimedOut
 
-            n_objects = self.num_mugs
-            poses = []  # [quat, pos]
-            classes = []
-            for k in range(n_objects):
-                model_name = "model_%d" % k
-                model_ind = np.random.randint(0, len(candidate_model_files))
-                class_path = candidate_model_files[model_ind]
-                classes.append(class_path)
-                parser.AddModelFromFile(class_path, model_name=model_name)
-                poses.append(
-                    [np.array(
-                        [self.initial_poses[7*k + 0], self.initial_poses[7*k + 1],
-                        self.initial_poses[7*k + 2], self.initial_poses[7*k + 3]]),
-                        self.initial_poses[7*k + 4], self.initial_poses[7*k + 5],
-                        self.initial_poses[7*k + 6]])
+        # print('t: {}'.format(t))
+        q0_final = mbp.GetPositions(mbp_context).copy()
+        # print('q0_final: {}'.format(q0_final), flush=True)
 
-            mbp.Finalize()
+        if self.folder_name is None:
+            raise Exception('have not yet set the folder name')
 
-            # print('poses: {}'.format(poses), flush=True)
+        folder_name = '{}/{}'.format(self.folder_name, 'optimization_run')
+        filename = '{}/{}_{:05d}'.format(folder_name, n_objects, iteration_num)
 
-            if self.meshcat_visualizer_desired:
-                self.run_meshcat_visualizer(builder, scene_graph, visualizer)
+        # Local optimizer
+        if process_num is not None:
+            filename = '{}/{:03d}/{}_{:05d}'.format(
+                folder_name, process_num, n_objects, iteration_num)                
 
-            # Add camera
-            depth_camera_properties = DepthCameraProperties(
-                width=1000, height=1000, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
-            parent_frame_id = scene_graph.world_frame_id()
-            camera_tf = RigidTransform(p=[0.0, 0.0, 0.95], rpy=RollPitchYaw([0, np.pi, 0]))
-            camera = builder.AddSystem(
-                RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=False))
-            camera.DeclarePeriodicPublish(0.1, 0.)
-            builder.Connect(scene_graph.get_query_output_port(),
-                            camera.query_object_input_port())
+        rgb_and_label_image_visualizer.save_image(filename)
 
-            rgb_and_label_image_visualizer = RgbAndLabelImageVisualizer(draw_timestep=0.1)
-            camera_viz = builder.AddSystem(rgb_and_label_image_visualizer)
-            builder.Connect(camera.color_image_output_port(),
-                            camera_viz.get_input_port(0))
-            # builder.Connect(camera.label_image_output_port(),
-            #                 camera_viz.get_input_port(1))
+        # Write to a file
+        self.write_poses_to_file(filename, q0, q0_final)
 
-            diagram = builder.Build()
+        if q0_final[-1] < 0:
+            print('POSE IS NOT CONSTRAINED', flush=True)
+            raise NotConstrained
 
-            diagram_context = diagram.CreateDefaultContext()
-            mbp_context = diagram.GetMutableSubsystemContext(
-                mbp, diagram_context)
-            sg_context = diagram.GetMutableSubsystemContext(
-                scene_graph, diagram_context)
+        # print('DONE with iteration {}!'.format(self.iteration_num))
 
-            q0 = mbp.GetPositions(mbp_context).copy()
-            for k in range(len(poses)):
-                offset = k*7
-                q0[(offset):(offset+4)] = poses[k][0]
-                q0[(offset+4):(offset+7)] = poses[k][1]
-
-            simulator = Simulator(diagram, diagram_context)
-            # simulator.set_target_realtime_rate(1.0)
-            simulator.set_publish_every_time_step(False)
-            simulator.Initialize()
-            # print('initialized simulator', flush=True)
-
-            ik = InverseKinematics(mbp, mbp_context)
-            q_dec = ik.q()
-            prog = ik.get_mutable_prog()
-
-            def squaredNorm(x):
-                return np.array([x[0] ** 2 + x[1] ** 2 + x[2] ** 2 + x[3] ** 2])
-
-            for k in range(len(poses)):
-                # Quaternion norm
-                prog.AddConstraint(
-                    squaredNorm, [1], [1], q_dec[(k*7):(k*7+4)])
-                # Trivial quaternion bounds
-                prog.AddBoundingBoxConstraint(
-                    -np.ones(4), np.ones(4), q_dec[(k*7):(k*7+4)])
-                # Conservative bounds on on XYZ
-                prog.AddBoundingBoxConstraint(
-                    np.array([-2., -2., -2.]), np.array([2., 2., 2.]),
-                    q_dec[(k*7+4):(k*7+7)])
-
-            def vis_callback(x):
-                mbp.SetPositions(mbp_context, x)
-                global pose_bundle
-                pose_bundle = scene_graph.get_pose_bundle_output_port().Eval(sg_context)
-
-            prog.AddVisualizationCallback(vis_callback, q_dec)
-            prog.AddQuadraticErrorCost(np.eye(q0.shape[0])*1.0, q0, q_dec)
-
-            ik.AddMinimumDistanceConstraint(0.001, threshold_distance=1.0)
-            
-            prog.SetInitialGuess(q_dec, q0)
-            start_time = time.time()
-            solver = SnoptSolver()
-            sid = solver.solver_type()
-            # prog.SetSolverOption(sid, "Print file", "test.snopt")
-            prog.SetSolverOption(sid, "Major feasibility tolerance", 1e-3)
-            prog.SetSolverOption(sid, "Major optimality tolerance", 1e-2)
-            prog.SetSolverOption(sid, "Minor feasibility tolerance", 1e-3)
-            prog.SetSolverOption(sid, "Scale option", 0)
-
-            # print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
-            # print(type(prog))
-            result = mp.Solve(prog)
-            # print("Solve info: {}".format(result), flush=True)
-            # print("Solved in %f seconds" % (time.time() - start_time))
-            # print(result.get_solver_id().name())
-            q0_proj = result.GetSolution(q_dec)
-            mbp.SetPositions(mbp_context, q0_proj)
-            q0_initial = q0_proj.copy()
-            # print('q0_initial: {}'.format(q0_initial), flush=True)
-
-            converged = False
-            t = 0.1
-
-            start_time = time.time()
-
-            while not converged:
-                simulator.AdvanceTo(t)
-                t += 0.0001
-                
-                velocities = mbp.GetVelocities(mbp_context)
-                # print(velocities)
-                # print('t: {:10.4f}, norm: {:10.4f}, x: {:10.4f}, y: {:10.4f}, z: {:10.4f}'.format(
-                #     t, np.linalg.norm(velocities), velocities[0], velocities[1], velocities[2]))
-
-                if np.linalg.norm(velocities) < 0.05:
-                    converged = True
-
-                # If haven't timed out in 5 min, just set converged = True
-
-                if (time.time() - start_time) > 5 * 60:
-                    converged = True
-                    print('TIMED OUT IN FORWARD SIMULATION!', flush=True)
-
-            # print('t: {}'.format(t))
-            q0_final = mbp.GetPositions(mbp_context).copy()
-            # print('q0_final: {}'.format(q0_final), flush=True)
-
-            if self.folder_name is None:
-                raise Exception('have not yet set the folder name')
-
-            filename = '{}/{}_{:05d}'.format(self.folder_name, n_objects, iteration_num)
-
-            # Local optimizer
-            if process_num is not None:
-                filename = 'robust_perception/optimization/{}/{:03d}/{}_{:05d}'.format(
-                    self.folder_name, process_num, n_objects, iteration_num)                
-
-            rgb_and_label_image_visualizer.save_image(filename)
-
-            # Write to a file
-            self.write_poses_to_file(filename, q0, q0_final)
-
-            # print('DONE with iteration {}!'.format(self.iteration_num))
-
-        except:
-            print("Unhandled unnamed exception, probably sim error", flush=True)
-            raise
+        # except:
+        #     print("Unhandled unnamed exception, probably sim error", flush=True)
+        #     raise
 
         return filename
 
@@ -492,17 +503,23 @@ class MugPipeline():
         self.softmax_probabilities = probabilities.data.cpu().numpy()[0]
         return probabilities.data.cpu().numpy()[0], is_correct
 
+    def get_folder_name(self):
+        return self.folder_name
+
     def get_iteration_num(self):
         return self.iteration_num
 
-    def run_inference(self, poses, iteration_num, all_probabilities=[],
+    def run_inference(self, poses, iteration_num=None, all_probabilities=[],
             total_iterations=Manager().Value('d', 0), num_counterexamples=Manager().Value('d', 0),
             model_number=Manager().Value('d', 0), model_number_lock=Lock(), counter_lock=Lock(), all_probabilities_lock=Lock(),
-            file_q=None, return_is_correct=False):
+            file_q=None, return_is_correct=False, respawn_when_counterex=False):
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
         """
+
+        if iteration_num is None:
+            iteration_num = self.iteration_num
 
         print('iteration_num', iteration_num, flush=True)
         # print('poses', poses)
@@ -514,7 +531,7 @@ class MugPipeline():
         if self.optimizer_type == OptimizerType.NELDER_MEAD:
             iteration_num = self.iteration_num
 
-        if self.optimizer_type == OptimizerType.NONE:
+        if self.optimizer_type == OptimizerType.RANDOM:
             self.iteration_num = iteration_num
 
         print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num), flush=True)
@@ -544,10 +561,15 @@ class MugPipeline():
         # print('before creating image', flush=True)
 
         # TODO change this, maybe just take in process_num regardless
-        if self.optimizer_type == OptimizerType.NELDER_MEAD:
-            imagefile = self.create_image(iteration_num, process_num)
-        else:
-            imagefile = self.create_image(iteration_num)
+        try:
+            if self.optimizer_type == OptimizerType.NELDER_MEAD:
+                # WRAP THIS IN TRY EXCEPT
+                imagefile = self.create_image(iteration_num, process_num)
+            else:
+                imagefile = self.create_image(iteration_num)
+        except:
+            print('EXCEPTION, returning 1.01')
+            return 1.01
 
         imagefile += '_color.png'
 
@@ -555,7 +577,7 @@ class MugPipeline():
 
         with model_number_lock:
             model_path = os.path.join(self.package_directory,
-                '../data/experiment4_dist/models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
+                '../data/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
 
         (model, _, _) = MyNet.load_checkpoint(model_path, use_gpu=False)
         model.eval()
@@ -572,15 +594,14 @@ class MugPipeline():
             iteration_num, probabilities, probability), flush=True)
         print('      {}'.format(self.initial_poses), flush=True)
 
-        folder = os.path.join(self.package_directory, '../data/experiment4_dist')
-
-        training_set_dir = os.path.join(folder, 'training_set')
-        test_set_dir = os.path.join(folder, 'test_set')
-        counterexample_set_dir = os.path.join(folder, 'counterexample_set')
-        models_dir = os.path.join(folder, 'models')
+        counterexample_set_dir = os.path.join(self.folder_name, 'counterexample_set')
 
         if not is_correct:
             if self.retrain_with_counterexamples:
+                training_set_dir = os.path.join(self.folder_name, 'training_set')
+                test_set_dir = os.path.join(self.folder_name, 'test_set')
+                models_dir = os.path.join(self.folder_name, 'models')
+
                 print('retraining with counterex', flush=True)
                 # Find {train, test, adversarial} set accuracy
 
@@ -610,6 +631,9 @@ class MugPipeline():
                     new_net.train(num_epochs=50)
             else:
                 # Not retraining, just generating counterexample set
+                if not os.path.exists(counterexample_set_dir):
+                    os.mkdir(counterexample_set_dir)
+
                 os.path.join(counterexample_set_dir, '{}'.format(self.num_mugs))
                 shutil.copy(imagefile, counterexample_set_dir)
                 print('imagefile: {}, counterexample_set: {}'.format(imagefile, counterexample_set_dir))
@@ -645,7 +669,7 @@ class MugPipeline():
                 print('raising FoundCounterexample exception')
                 raise FoundCounterexample
 
-        # if self.optimizer_type == OptimizerType.NONE:
+        # if self.optimizer_type == OptimizerType.RANDOM:
         #     if not is_correct:
         #         print('raising FoundCounterexample exception')
         #         raise FoundCounterexample

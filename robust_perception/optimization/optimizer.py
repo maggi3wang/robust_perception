@@ -1,8 +1,8 @@
-# Standard libraries imports
 import argparse
 import codecs
 import datetime
 from enum import Enum
+from func_timeout import func_timeout, FunctionTimedOut
 from itertools import repeat
 import math
 import matplotlib as mpl
@@ -17,7 +17,6 @@ import sys
 from pydrake.math import (RollPitchYaw, RigidTransform)
 
 # Optimization library imports
-import nevergrad as ng
 import rbfopt
 from scipy import optimize
 import cma
@@ -29,12 +28,16 @@ class OptimizerType(Enum):
     """
     Summary of each optimizer type here: bit.ly/TODO
     """
+    # Global optimizers
     PYCMA = 1
     RBFOPT = 2
-    NEVERGRAD = 3
+
+    # Local optimizers
+    NELDER_MEAD = 3
     SLSQP = 4
-    NELDER_MEAD = 5
-    NONE = 6
+
+    # Random sample
+    RANDOM = 5
 
 # Local imports
 from ..optimization.eval_parallel import EvalParallel3
@@ -48,17 +51,10 @@ class Optimizer():
 
     def __init__(self, num_mugs, mug_lower_bound, mug_upper_bound,
             max_iterations, max_time, max_counterexamples, num_processes,
-            retrain_with_counterexamples):
-        """
-        Args:
-            num_mugs (int):
-            mug_lower_bound ():
-            ... TODO
-        """
-
+            retrain_with_counterexamples, mug_initial_poses=[]):
         # torch.multiprocessing.set_start_method('spawn')
 
-        self.mug_initial_poses = []
+        self.mug_initial_poses = mug_initial_poses
 
         self.mug_lower_bounds = []
         for _ in range(num_mugs):
@@ -125,16 +121,6 @@ class Optimizer():
             Note that the bounds have to be rescaled later, for pycma only.
         """
 
-        # self.mug_pipeline.set_folder_name("data_pycma")
-        # es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0, 
-        #     {'bounds': [-1.0, 1.0], 'verb_disp': 1})
-        # es.optimize(self.mug_pipeline.run_inference)
-        # es.result_pretty()
-
-        # cma.plot()
-
-        # folder_name = "data_pycma"
-
         if self.retrain_with_counterexamples:
             folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/run_with_retraining')
         else:
@@ -178,14 +164,7 @@ class Optimizer():
         watcher = Process(target=self.listener, args=(file_q, filename))
         watcher.start()
 
-        # q = manager.Queue()
-
-        # model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-        #             '../data/experiment1/models/mug_numeration_classifier_{:03d}.pth.tar'.format(0))
-        # (model, _, _) = MyNet.load_checkpoint(model_path)
-        # model.eval()
-        # model.share_memory()
-        # q.put(model)
+        # TODO: share GPU for inference using model.share_memory()
 
         while not es.stop():
             try:
@@ -196,7 +175,8 @@ class Optimizer():
                 elapsed_time = time.time() - start_time
                 ep(X, lst=lst, args=(self.mug_pipeline, self.all_probabilities,
                     self.total_iterations, self.num_counterexamples,
-                    self.model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q),
+                    self.model_number, model_number_lock, counter_lock,
+                    all_probabilities_lock, file_q),
                     timeout=(self.max_time - elapsed_time))
                 print('after ep', flush=True)
             except torch.multiprocessing.context.TimeoutError:
@@ -226,16 +206,35 @@ class Optimizer():
 
         sys.stdout.flush()
 
+    def run_rbfopt(self):
+        """
+        Radial Basis Function interpolation.
+        """
+        folder_name = os.path.join(self.package_directory, '../data/rbfopt/optimization_run')
+
+        self.mug_pipeline.set_folder_name("data_rbfopt")
+
+        bb = rbfopt.RbfoptUserBlackBox(
+            self.num_vars, 
+            self.mug_lower_bounds, self.mug_upper_bounds,
+            np.array(['R'] * self.num_vars), self.mug_pipeline.run_inference)
+        settings = rbfopt.RbfoptSettings(max_evaluations=self.max_iterations)
+        alg = rbfopt.RbfoptAlgorithm(settings, bb)
+        objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
+        state_path = os.path.join(self.package_directory, 'state.dat')
+        # print(state_path)
+        alg.save_to_file(state_path)
+
+        print('all_poses: {}, all_probabilities: {}'.format(
+            self.mug_pipeline.get_all_poses(), self.mug_pipeline.get_all_probabilities()))
+
+    ## Local optimizers
+
     @staticmethod
-    def run_nelder_mead_process(process_num, mug_pipeline, num_mugs, all_probabilities,
-            total_iterations, total_iterations_lock, file_q):
-        # Randomly initialize mug
-        mug_initial_poses = []
-        num_mugs = 3
-        for i in range(num_mugs):
-            mug_initial_poses += \
-                RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
-                [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+    def run_nelder_mead_helper(process_num, mug_pipeline, num_mugs, all_probabilities,
+            total_iterations, num_counterexamples, model_number, model_number_lock,
+            counter_lock, all_probabilities_lock, file_q, use_input_initial_poses, mug_initial_poses,
+            respawn_when_counterex):
 
         mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
         mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
@@ -247,22 +246,22 @@ class Optimizer():
             mug_lower_bounds += mug_lower_bound
             mug_upper_bounds += mug_upper_bound
 
-        # print('mug_initial_poses', mug_initial_poses)
-        # print('iteration_num', iteration_num)
-
         while True:
             try:
-                # print('process_num', process_num)
+                folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), mug_pipeline.get_folder_name())
+                print(folder)
+                folder = '{}/optimization_run/{:03d}'.format(folder, process_num)
 
-                folder = '{}/{}/{:03d}'.format(os.path.dirname(os.path.abspath(__file__)),
-                    'data_scipy_nelder_mead', process_num)
-
-                # print('folder', folder)
                 if not os.path.exists(folder):
+                    print('creating folder')
                     os.mkdir(folder)
 
+                assert(os.path.exists(folder))
+
                 optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, 
-                    args=(process_num, all_probabilities, total_iterations, total_iterations_lock, file_q),
+                    args=(process_num, all_probabilities, total_iterations, num_counterexamples,
+                        model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q,
+                        False, respawn_when_counterex),
                     bounds=(mug_lower_bounds, mug_upper_bounds), method='Nelder-Mead',
                     options={'disp': True})
             except FoundCounterexample:
@@ -276,42 +275,65 @@ class Optimizer():
                 Optimizer.highest_process_num += 1
                 process_num = Optimizer.highest_process_num - 1
 
-    def run_scipy_nelder_mead(self):
+    def run_nelder_mead(self, use_input_initial_poses=False, respawn_when_counterex=False):
         """
         For local search methods, we want to create n parallel processes with random initial poses.
         Each time the process finds a counter example, kill the current process and spawn a
         new process; this allows us to find counter exs that are dissimilar to each other.
         """
         
+        mug_initial_poses = []
+
+        if use_input_initial_poses:
+            mug_initial_poses = self.mug_initial_poses
+        else:
+            for i in range(self.num_mugs):
+                mug_initial_poses += \
+                    RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                    [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+
         start_time = time.time()
 
         manager = Manager()
         self.all_probabilities = manager.list()
         self.total_iterations = manager.Value('d', 0)
-        total_iterations_lock = manager.Lock()
+        num_counterexamples = manager.Value('d', 0)
+        model_number = manager.Value('d', 0)
+        model_number_lock = manager.Lock()
+        counter_lock = manager.Lock()
+        all_probabilities_lock = manager.Lock()
 
         file_q = manager.Queue()
 
-        folder_name = "data_scipy_nelder_mead"
+        folder_name = os.path.join(self.package_directory, "../data/optimization_comparisons/nelder_mead")
         self.mug_pipeline.set_folder_name(folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.NELDER_MEAD)
 
         pool = Pool(self.num_processes + 1)
 
-        filename = 'robust_perception/optimization/{}/results.csv'.format(folder_name)
-        watcher = pool.apply_async(self.listener, (file_q, filename))
+        # filename = '{}/results.csv'.format(folder_name)
+        # print('filename', filename)
+        # watcher = pool.apply_async(self.listener, (file_q, filename))
+
+        filename = '{}/results.csv'.format(folder_name)
+        watcher = Process(target=self.listener, args=(file_q, filename))
+        watcher.start()
 
         try:
             result = func_timeout(self.max_time, pool.starmap,
-                args=(self.run_nelder_mead_process,
+                args=(self.run_nelder_mead_helper,
                 zip(range(self.num_processes), repeat(self.mug_pipeline), repeat(self.num_mugs),
-                    repeat(self.all_probabilities), repeat(self.total_iterations), repeat(total_iterations_lock),
-                    repeat(file_q))))
-
+                    repeat(self.all_probabilities), repeat(self.total_iterations),
+                    repeat(num_counterexamples),
+                    repeat(model_number), repeat(model_number_lock),
+                    repeat(counter_lock), repeat(all_probabilities_lock),
+                    repeat(file_q), repeat(use_input_initial_poses), repeat(mug_initial_poses),
+                    repeat(respawn_when_counterex))))
         except FunctionTimedOut:
             elapsed_time = time.time() - start_time
             print('ran for {} minutes! total number of iterations is {}, with {} sec/image'.format(
-                elapsed_time/60.0, self.total_iterations.value, elapsed_time/self.total_iterations.value))
+                elapsed_time/60.0, self.total_iterations.value,
+                elapsed_time/self.total_iterations.value))
 
             file_q.put('kill')
             pool.terminate()
@@ -323,6 +345,189 @@ class Optimizer():
 
         sys.stdout.flush()
 
+    # SLSQP
+
+    @staticmethod
+    def run_slsqp_helper(process_num, mug_pipeline, num_mugs, all_probabilities,
+            total_iterations, num_counterexamples, model_number, model_number_lock,
+            counter_lock, all_probabilities_lock, file_q, use_input_initial_poses, mug_initial_poses,
+            respawn_when_counterex):
+
+        mug_lower_bound = (-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1)
+        mug_upper_bound = (1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2)
+
+        mug_lower_bounds = []
+        mug_upper_bounds = []
+
+        for i in range(0, 3):
+            mug_lower_bounds += mug_lower_bound
+            mug_upper_bounds += mug_upper_bound
+        mug_bound = [(-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-0.1, 0.1), (-0.1, 0.1), (0.1, 0.2)]
+
+        mug_bounds = []
+        for i in range(0, 3):
+            mug_bounds += mug_bound
+
+        while True:
+            try:
+                folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), mug_pipeline.get_folder_name())
+                print(folder)
+                folder = '{}/optimization_run/{:03d}'.format(folder, process_num)
+
+                if not os.path.exists(folder):
+                    print('creating folder')
+                    os.mkdir(folder)
+
+                assert(os.path.exists(folder))
+
+                optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, 
+                    args=(process_num, all_probabilities, total_iterations, num_counterexamples,
+                        model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q,
+                        False, respawn_when_counterex),
+                    bounds=mug_bounds, method='SLSQP',
+                    options={'disp': True})
+            except FoundCounterexample:
+                # After we find a counterex, get new mug initial pose and restart optimizer
+                mug_initial_poses = []
+                for i in range(num_mugs):
+                    mug_initial_poses += \
+                        RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                        [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+                # TODO put this in a lock
+                Optimizer.highest_process_num += 1
+                process_num = Optimizer.highest_process_num - 1
+
+    def run_slsqp(self, use_input_initial_poses=False, respawn_when_counterex=False):
+        """
+        For local search methods, we want to create n parallel processes with random initial poses.
+        Each time the process finds a counter example, kill the current process and spawn a
+        new process; this allows us to find counter exs that are dissimilar to each other.
+        """
+        
+        mug_initial_poses = []
+
+        if use_input_initial_poses:
+            mug_initial_poses = self.mug_initial_poses
+        else:
+            for i in range(self.num_mugs):
+                mug_initial_poses += \
+                    RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                    [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+
+        start_time = time.time()
+
+        manager = Manager()
+        self.all_probabilities = manager.list()
+        self.total_iterations = manager.Value('d', 0)
+        num_counterexamples = manager.Value('d', 0)
+        model_number = manager.Value('d', 0)
+        model_number_lock = manager.Lock()
+        counter_lock = manager.Lock()
+        all_probabilities_lock = manager.Lock()
+
+        file_q = manager.Queue()
+
+        folder_name = os.path.join(self.package_directory, "../data/optimization_comparisons/slsqp")
+        self.mug_pipeline.set_folder_name(folder_name)
+        self.mug_pipeline.set_optimizer_type(OptimizerType.NELDER_MEAD)
+
+        pool = Pool(self.num_processes + 1)
+
+        # filename = '{}/results.csv'.format(folder_name)
+        # print('filename', filename)
+        # watcher = pool.apply_async(self.listener, (file_q, filename))
+
+        filename = '{}/results.csv'.format(folder_name)
+        watcher = Process(target=self.listener, args=(file_q, filename))
+        watcher.start()
+
+        try:
+            result = func_timeout(self.max_time, pool.starmap,
+                args=(self.run_slsqp_helper,
+                zip(range(self.num_processes), repeat(self.mug_pipeline), repeat(self.num_mugs),
+                    repeat(self.all_probabilities), repeat(self.total_iterations),
+                    repeat(num_counterexamples),
+                    repeat(model_number), repeat(model_number_lock),
+                    repeat(counter_lock), repeat(all_probabilities_lock),
+                    repeat(file_q), repeat(use_input_initial_poses), repeat(mug_initial_poses),
+                    repeat(respawn_when_counterex))))
+        except FunctionTimedOut:
+            elapsed_time = time.time() - start_time
+            print('ran for {} minutes! total number of iterations is {}, with {} sec/image'.format(
+                elapsed_time/60.0, self.total_iterations.value,
+                elapsed_time/self.total_iterations.value))
+
+            file_q.put('kill')
+            pool.terminate()
+            pool.join()
+
+        end_time = time.time()
+
+        print('probabilities:', self.all_probabilities)
+
+        sys.stdout.flush()
+
+    # @staticmethod
+    # def run_scipy_fmin_slsqp_helper(mug_pipeline, mug_initial_poses, mug_bounds, all_probabilities, file_q, max_iterations):
+    #     exit_mode = optimize.fmin_slsqp(mug_pipeline.run_inference, mug_initial_poses,
+    #         bounds=mug_bounds, args=(all_probabilities=all_probabilities, file_q=file_q, increment_iteration_num=True),
+    #         full_output=True, iter=max_iterations)
+    #     return exit_mode
+
+    # def run_scipy_fmin_slsqp(self, use_input_initial_poses=False):
+    #     """
+    #         Local optimization (sequential least square programming)
+    #     """
+    #     folder_name = os.path.join(self.package_directory, '../data/optimization_comparisons/slsqp/optimization_run')
+
+    #     self.mug_pipeline.set_folder_name(folder_name)
+    #     self.mug_pipeline.set_optimizer_type(OptimizerType.SLSQP)
+
+    #     mug_initial_poses = []
+
+    #     if use_input_initial_poses:
+    #         mug_initial_poses = self.mug_initial_poses
+    #     else:
+    #         for i in range(self.num_mugs):
+    #             mug_initial_poses += \
+    #                 RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+    #                 [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+
+    #     mug_bound = [(-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-0.1, 0.1), (-0.1, 0.1), (0.1, 0.2)]
+
+    #     mug_bounds = []
+    #     for i in range(0, 3):
+    #         mug_bounds += mug_bound
+
+    #     all_probabilities = []
+
+    #     manager = Manager()
+    #     file_q = manager.Queue()
+
+    #     filename = '{}/results.csv'.format(folder_name)
+    #     watcher = Process(target=self.listener, args=(file_q, filename))
+    #     watcher.start()
+
+    #     # exit_mode = optimize.fmin_slsqp(self.mug_pipeline.run_inference, mug_initial_poses,
+    #         # bounds=mug_bounds, args=(all_probabilities, file_q),
+    #         # full_output=True, iter=self.max_iterations)
+    #     exit_mode = self.run_scipy_fmin_slsqp_helper(
+    #         self.mug_pipeline, mug_initial_poses, mug_bounds, all_probabilities, file_q, self.max_iterations)
+
+    #     # try:
+    #     #     exit_mode = func_timeout(self.max_time, optimize.fmin_slsqp,
+    #     #         args=(self.mug_pipeline.run_inference, mug_initial_poses,
+    #     #             bounds=mug_bounds, 
+    #     #             args=(all_probabilities=all_probabilities, file=file_q),
+    #     #             full_output=True, iter=self.max_iterations))
+    #     # except FunctionTimedOut:
+    #     #     print('fmin_slsqp finished in {} seconds'.format(self.max_time))
+    #     # except Exception as e:
+    #     #     print('exception {} was thrown'.format(e))
+
+    #     print(exit_mode)
+    #     print(all_probabilities)
+
     ## Metadata and visualization tools
 
     @staticmethod
@@ -331,6 +536,7 @@ class Optimizer():
         Updates csv file with metadata.
         """
         with open(filename, 'w') as f:
+            print('opened {}'.format(filename))
             f.write('process_num, iter_num, probability\n')
             while 1:
                 m = q.get()
@@ -353,62 +559,3 @@ class Optimizer():
         ax.grid()
         fig2.savefig(os.path.join(self.package_directory, 'probability_plot.png'))
         plt.show()
-
-    def run_rbfopt(self):
-        """
-        Rbfopt
-        """
-        self.mug_pipeline.set_folder_name("data_rbfopt")
-
-        bb = rbfopt.RbfoptUserBlackBox(
-            self.num_vars, 
-            self.mug_lower_bounds, self.mug_upper_bounds,
-            np.array(['R'] * self.num_vars), self.mug_pipeline.run_inference)
-        settings = rbfopt.RbfoptSettings(max_evaluations=self.max_iterations)
-        alg = rbfopt.RbfoptAlgorithm(settings, bb)
-        objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
-        state_path = os.path.join(self.package_directory, 'state.dat')
-        # print(state_path)
-        alg.save_to_file(state_path)
-
-        print('all_poses: {}, all_probabilities: {}'.format(
-            self.mug_pipeline.get_all_poses(), self.mug_pipeline.get_all_probabilities()))
-
-    def run_scipy_fmin_slsqp(self):
-        """
-            Local optimization (sequential least square programming)
-        """
-        self.mug_pipeline.set_folder_name("data_scipy_fmin_slsqp")
-
-        mug_initial_poses = []
-        for i in range(self.num_mugs):
-            mug_initial_poses += \
-                RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
-                [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
-
-        mug_bound = [(-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-0.1, 0.1), (-0.1, 0.1), (0.1, 0.2)]
-
-        mug_bounds = []
-        for i in range(0, 3):
-            mug_bounds += mug_bound
-
-        exit_mode = optimize.fmin_slsqp(self.mug_pipeline.run_inference, mug_initial_poses,
-            bounds=mug_bounds, full_output=True, iter=self.max_iterations)
-
-        print(exit_mode)
-
-###################################################################################################
-# Potentially useful, but not using atm
-
-    # def run_nevergrad():
-    #     """
-        
-    #     """
-    #     mug_pipeline.set_folder_name("data_nevergrad")
-
-    #     initial_poses = ng.var.Array(1, 7).bounded(-0.5, 0.5)
-    #     instrum = ng.Instrumentation(poses=initial_poses)
-    #     optimizer = ng.optimizers.RandomSearch(instrumentation=instrum, budget=100)
-    #     probability = optimizer.minimize(run_inference)
-    #     print(probability)
-    #     return all_poses, all_probabilities

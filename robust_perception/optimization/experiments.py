@@ -52,7 +52,7 @@ class Experiment():
         # folder_name = os.path.join(os.path.dirname(os.path.abspath(__file__)),
         #    '../data/experiment4/find_counterexample')
         # mug_pipeline.set_folder_name(folder_name)
-        mug_pipeline.set_optimizer_type(OptimizerType.NONE)
+        mug_pipeline.set_optimizer_type(OptimizerType.RANDOM)
 
         num_processes = 22
         pool = Pool(processes=num_processes)
