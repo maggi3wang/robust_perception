@@ -72,7 +72,7 @@ class Optimizer():
         # Exit conditions, initialized to some large numbers
         self.max_time = 10**8
         self.max_counterexamples = 10**10
-        self.max_iterations = 10**10
+        self.max_iterations = 10**6
 
         if max_iterations is not None:
             self.max_iterations = max_iterations
@@ -235,9 +235,6 @@ class Optimizer():
         state_path = os.path.join(folder_name, 'state.dat')
         # print(state_path)
         alg.save_to_file(state_path)
-
-        print('all_poses: {}, all_probabilities: {}'.format(
-            self.mug_pipeline.get_all_poses(), self.mug_pipeline.get_all_probabilities()))
 
     ## Local optimizers
 

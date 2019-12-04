@@ -100,8 +100,8 @@ def main():
 
     # train_initial_model()
 
-    run_local_optimizers()
-    # run_global_optimizers()
+    # run_local_optimizers()
+    run_global_optimizers()
 
 if __name__ == "__main__":
     main()
