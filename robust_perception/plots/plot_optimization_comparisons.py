@@ -37,6 +37,7 @@ def plot_optimization_comparisons(method, csv_name, title):
     probabilities = np.array(probabilities[1:len(probabilities)], dtype=float)
 
     print(probabilities[1:len(probabilities)])
+    plt.figure(figsize=(16,8))
     plt.plot(probabilities[1:len(probabilities)])
     axes = plt.gca()
     axes.set_xlim([0, len(probabilities)])
@@ -48,11 +49,12 @@ def plot_optimization_comparisons(method, csv_name, title):
     axes.set_title('{} Optimization Run (5 hours)'.format(title))
 
     plt.savefig(os.path.join(opt_dir, '{}_probability_plot.png'.format(method)))
-    plt.show()
+    #plt.show()
 
 def main():
     plot_optimization_comparisons(method='slsqp', csv_name='results_for_plotting.csv', title='SLSQP')
     plot_optimization_comparisons(method='nelder_mead', csv_name='results.csv', title='Nelder-Mead')
+    plot_optimization_comparisons(method='rbfopt', csv_name='results.csv', title='RBFOpt')
 
 if __name__ == "__main__":
     main()

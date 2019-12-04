@@ -1,0 +1,1 @@
+Did not restart when counterex was found.
