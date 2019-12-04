@@ -683,6 +683,22 @@ class MugPipeline():
         #     if not is_correct:
         #         print('raising FoundCounterexample exception')
         #         raise FoundCounterexample
+        if self.optimizer_type == OptimizerType.RBFOPT:
+            self.iteration_num += 1
+
+            filename = os.path.join(self.folder_name, 'results.csv') 
+            print(filename)
+
+            f = open(filename, "a+")
+            if self.iteration_num == 0:
+                f = open(filename, "w+")
+
+            res = '{:05d}, {:05d}, {:1.6f}, {:1.6f}, {:1.6f}, {:1.6f}, {:1.6f}, {:1d}, {},\n'.format(
+                process_num, iteration_num, 
+                probabilities[0], probabilities[1], probabilities[2], probabilities[3], probabilities[4],
+                is_correct, time.time())
+            f.write(res)
+            f.close()
 
         print('probability: {}'.format(probability), flush=True)
         sys.stdout.flush()

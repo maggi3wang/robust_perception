@@ -45,14 +45,14 @@ def run_local_optimizers():
             RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
             [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
 
-    slsqp_optimizer = Optimizer(
-        num_mugs=num_mugs, mug_initial_poses=mug_initial_poses,
-        mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
-        max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
-        num_processes=1, retrain_with_counterexamples=False)
+    # slsqp_optimizer = Optimizer(
+    #     num_mugs=num_mugs, mug_initial_poses=mug_initial_poses,
+    #     mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
+    #     max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
+    #     num_processes=1, retrain_with_counterexamples=False)
 
-    # Run optimizer based on optimizer type
-    slsqp_optimizer.run_local_optimizer(local_optimizer_method=OptimizerType.SLSQP, use_input_initial_poses=True)
+    # # Run optimizer based on optimizer type
+    # slsqp_optimizer.run_local_optimizer(local_optimizer_method=OptimizerType.SLSQP, use_input_initial_poses=True)
 
     # TODO make a reinitialize function
     # nelder_mead_optimizer = Optimizer(
@@ -73,42 +73,22 @@ def run_local_optimizers():
     # optimizer.plot_graphs()
 
 def run_global_optimizers():
-    # TODO
-    pass
-    #     # Run all four optimizers, one after the other, along with a random sample method
-    # # For 3 mugs only
+    max_sec = 5 * 60 * 60           # 5 hours
+    max_counterexamples = None
+    max_iterations = None
 
-    # # Parameters that are fairly variable
-    # optimizer_type = OptimizerType.PYCMA
+    # Parameters that are fairly static
+    mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
+    mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
 
-    # max_sec = None
-    # max_counterexamples = 200
-    # max_iterations = None
-
-    # # Parameters that are fairly static
-    # mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
-    # mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
-
-    # optimizer = Optimizer(
-    #     num_mugs=3, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
-    #     max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
-    #     num_processes=30, retrain_with_counterexamples=False)
-
-    # # Run optimizer based on optimizer type
-    # if optimizer_type == OptimizerType.PYCMA:
-    #     optimizer.run_pycma()
-    #     optimizer.plot_graphs()
-    # elif optimizer_type == OptimizerType.RBFOPT:
-    #     optimizer.run_rbfopt()
-    #     optimizer.plot_graphs()
-    # elif optimizer_type == OptimizerType.NEVERGRAD:
-    #     optimizer.plot_graphs(optimizer.run_nevergrad())
-    # elif optimizer_type == OptimizerType.SLSQP:
-    #     optimizer.run_scipy_fmin_slsqp()
-    #     optimizer.plot_graphs()
-    # elif optimizer_type == OptimizerType.NELDER_MEAD:
-    #     optimizer.run_scipy_nelder_mead()
-    #     optimizer.plot_graphs()
+    num_mugs = 3
+    
+    optimizer = Optimizer(
+        num_mugs=num_mugs, 
+        mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
+        max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
+        num_processes=1, retrain_with_counterexamples=False)
+    optimizer.run_rbfopt()
 
 
 def main():
@@ -120,7 +100,8 @@ def main():
 
     # train_initial_model()
 
-    run_local_optimizers()
+    # run_local_optimizers()
+    run_global_optimizers()
 
 if __name__ == "__main__":
     main()

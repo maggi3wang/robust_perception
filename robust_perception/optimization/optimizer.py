@@ -121,11 +121,17 @@ class Optimizer():
             Note that the bounds have to be rescaled later, for pycma only.
         """
 
-        if self.retrain_with_counterexamples:
-            folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/run_with_retraining')
-        else:
-            folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/initial_optimization_run')
+                # optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, 
+                #     args=(process_num, all_probabilities, total_iterations, num_counterexamples,
+                #         model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q,
+                #         False, respawn_when_counterex),
 
+        # if self.retrain_with_counterexamples:
+        #     folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/run_with_retraining')
+        # else:
+        #     folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/initial_optimization_run')
+
+        folder_name = os.path.join(self.package_directory, '../data/optimization_comparisons/cma_es')
         self.mug_pipeline.set_folder_name(folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.PYCMA)
 
@@ -210,9 +216,14 @@ class Optimizer():
         """
         Radial Basis Function interpolation.
         """
-        folder_name = os.path.join(self.package_directory, '../data/rbfopt/optimization_run')
+        folder_name = os.path.join(self.package_directory, '../data/optimization_comparisons/rbfopt')
+        self.mug_pipeline.set_folder_name(folder_name)
+        self.mug_pipeline.set_optimizer_type(OptimizerType.RBFOPT)
 
-        self.mug_pipeline.set_folder_name("data_rbfopt")
+        # file_q = manager.Queue()
+        # filename = '{}/results.csv'.format(folder_name)
+        # watcher = Process(target=self.listener, args=(file_q, filename))
+        # watcher.start()
 
         bb = rbfopt.RbfoptUserBlackBox(
             self.num_vars, 
@@ -221,7 +232,7 @@ class Optimizer():
         settings = rbfopt.RbfoptSettings(max_evaluations=self.max_iterations)
         alg = rbfopt.RbfoptAlgorithm(settings, bb)
         objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
-        state_path = os.path.join(self.package_directory, 'state.dat')
+        state_path = os.path.join(folder_name, 'state.dat')
         # print(state_path)
         alg.save_to_file(state_path)
 
