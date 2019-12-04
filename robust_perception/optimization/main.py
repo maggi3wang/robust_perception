@@ -55,13 +55,13 @@ def run_local_optimizers():
     # slsqp_optimizer.run_local_optimizer(local_optimizer_method=OptimizerType.SLSQP, use_input_initial_poses=True)
 
     # TODO make a reinitialize function
-    # nelder_mead_optimizer = Optimizer(
-    #     num_mugs=num_mugs, mug_initial_poses=mug_initial_poses,
-    #     mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
-    #     max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
-    #     num_processes=1, retrain_with_counterexamples=False)    
+    nelder_mead_optimizer = Optimizer(
+        num_mugs=num_mugs, mug_initial_poses=mug_initial_poses,
+        mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
+        max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
+        num_processes=1, retrain_with_counterexamples=False)    
 
-    # nelder_mead_optimizer.run_local_optimizer(local_optimizer_method=OptimizerType.NELDER_MEAD, use_input_initial_poses=True)
+    nelder_mead_optimizer.run_local_optimizer(local_optimizer_method=OptimizerType.NELDER_MEAD, use_input_initial_poses=True)
 
     # optimizer.run_slsqp(use_input_initial_poses=True)
     # optimizer.plot_graphs()
@@ -100,8 +100,8 @@ def main():
 
     # train_initial_model()
 
-    # run_local_optimizers()
-    run_global_optimizers()
+    run_local_optimizers()
+    # run_global_optimizers()
 
 if __name__ == "__main__":
     main()
