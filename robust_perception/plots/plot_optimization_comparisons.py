@@ -36,9 +36,23 @@ def plot_optimization_comparisons(method, csv_name, title):
     probabilities = data.probability_3.tolist()
     probabilities = np.array(probabilities[1:len(probabilities)], dtype=float)
 
+    is_correct = data.is_correct.to_list()
+    is_correct = np.array(is_correct[1:len(is_correct)], dtype=int)
+
+    #iter_num = data.iter_num.to_list()
+    #iter_num = np.array(iter_num[1:len(iter_num)], dtype=int)
+    iter_num = range(0, len(is_correct))
+
     print(probabilities[1:len(probabilities)])
     plt.figure(figsize=(16,8))
-    plt.plot(probabilities[1:len(probabilities)])
+    plt.plot(iter_num, probabilities, linewidth=2)
+    for i, prob, is_corr in zip(iter_num, probabilities, is_correct):
+        #if is_corr:
+            #plt.scatter(i, prob, c='b', s=5)
+        #else:
+        if not is_corr:
+            plt.scatter(i, prob, c='r', s=15)
+
     axes = plt.gca()
     axes.set_xlim([0, len(probabilities)])
     axes.set_ylim([0, 1])
@@ -54,7 +68,7 @@ def plot_optimization_comparisons(method, csv_name, title):
 def main():
     plot_optimization_comparisons(method='slsqp', csv_name='results_for_plotting.csv', title='SLSQP')
     plot_optimization_comparisons(method='nelder_mead', csv_name='results.csv', title='Nelder-Mead')
-    plot_optimization_comparisons(method='rbfopt', csv_name='results.csv', title='RBFOpt')
+    plot_optimization_comparisons(method='rbfopt', csv_name='results_for_plotting.csv', title='RBFOpt')
 
 if __name__ == "__main__":
     main()

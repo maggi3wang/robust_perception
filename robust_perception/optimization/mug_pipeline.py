@@ -680,10 +680,6 @@ class MugPipeline():
         #         self.optimizer_type == OptimizerType.SLSQP):
         self.iteration_num += 1
 
-        if not is_correct and respawn_when_counterex:
-            print('raising FoundCounterexample exception')
-            raise FoundCounterexample
-
         # if self.optimizer_type == OptimizerType.RANDOM:
         #     if not is_correct:
         #         print('raising FoundCounterexample exception')
@@ -704,6 +700,10 @@ class MugPipeline():
 
         print('probability: {}'.format(probability), flush=True)
         sys.stdout.flush()
+
+        if not is_correct and respawn_when_counterex:
+            print('raising FoundCounterexample exception')
+            raise FoundCounterexample
 
         if return_is_correct:
             return probability, is_correct
