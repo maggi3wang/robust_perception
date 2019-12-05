@@ -512,7 +512,7 @@ class MugPipeline():
     def run_inference(self, poses, iteration_num=None, all_probabilities=[],
             total_iterations=Manager().Value('d', 0), num_counterexamples=Manager().Value('d', 0),
             model_number=Manager().Value('d', 0), model_number_lock=Lock(), counter_lock=Lock(), all_probabilities_lock=Lock(),
-            file_q=None, return_is_correct=False, respawn_when_counterex=False):
+            file_q=None, return_is_correct=False, respawn_when_counterex=True):
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
@@ -569,10 +569,15 @@ class MugPipeline():
             else:
                 imagefile = self.create_image(iteration_num)
         except Exception as e:
-            if file_q:
-                res = '{:05d}, {:05d}, {}, , , , , , {},'.format(
+            res = '{:05d}, {:05d}, {}, , , , , , {},'.format(
                     process_num, iteration_num, type(e).__name__, time.time())
+            if file_q:
                 file_q.put(res)
+            else:
+                filename = os.path.join(self.folder_name, 'results.csv') 
+                f = open(filename, "a+")
+                f.write(res)
+                f.close()
 
             print('EXCEPTION {}, returning 1.01'.format(type(e).__name__))
             return 1.01
@@ -671,23 +676,20 @@ class MugPipeline():
                 print('found {} counterexamples'.format(num_counterexamples.value))
                 raise FoundMaxCounterexamples
 
-        if (self.optimizer_type == OptimizerType.NELDER_MEAD or
-                self.optimizer_type == OptimizerType.SLSQP):
-            self.iteration_num += 1
+        # if (self.optimizer_type == OptimizerType.NELDER_MEAD or
+        #         self.optimizer_type == OptimizerType.SLSQP):
+        self.iteration_num += 1
 
-            if not is_correct and respawn_when_counterex:
-                print('raising FoundCounterexample exception')
-                raise FoundCounterexample
+        if not is_correct and respawn_when_counterex:
+            print('raising FoundCounterexample exception')
+            raise FoundCounterexample
 
         # if self.optimizer_type == OptimizerType.RANDOM:
         #     if not is_correct:
         #         print('raising FoundCounterexample exception')
         #         raise FoundCounterexample
         if self.optimizer_type == OptimizerType.RBFOPT:
-            self.iteration_num += 1
-
             filename = os.path.join(self.folder_name, 'results.csv') 
-            print(filename)
 
             f = open(filename, "a+")
             if self.iteration_num == 0:

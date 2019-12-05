@@ -225,16 +225,22 @@ class Optimizer():
         # watcher = Process(target=self.listener, args=(file_q, filename))
         # watcher.start()
 
-        bb = rbfopt.RbfoptUserBlackBox(
-            self.num_vars, 
-            self.mug_lower_bounds, self.mug_upper_bounds,
-            np.array(['R'] * self.num_vars), self.mug_pipeline.run_inference)
-        settings = rbfopt.RbfoptSettings(max_evaluations=self.max_iterations)
-        alg = rbfopt.RbfoptAlgorithm(settings, bb)
-        objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
-        state_path = os.path.join(folder_name, 'state.dat')
-        # print(state_path)
-        alg.save_to_file(state_path)
+        while True:
+            try:
+                print('starting RBFOpt')
+                bb = rbfopt.RbfoptUserBlackBox(
+                    self.num_vars, 
+                    self.mug_lower_bounds, self.mug_upper_bounds,
+                    np.array(['R'] * self.num_vars), self.mug_pipeline.run_inference)
+                settings = rbfopt.RbfoptSettings(max_evaluations=self.max_iterations)
+                alg = rbfopt.RbfoptAlgorithm(settings, bb)
+                objval, x, itercount, evalcount, fast_evalcount = alg.optimize()
+                state_path = os.path.join(folder_name, 'state.dat')
+                # print(state_path)
+                alg.save_to_file(state_path)
+            except FoundCounterexample:
+                # restart
+                pass
 
     ## Local optimizers
 
