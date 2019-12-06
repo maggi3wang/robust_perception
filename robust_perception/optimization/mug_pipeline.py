@@ -409,13 +409,13 @@ class MugPipeline():
         if self.folder_name is None:
             raise Exception('have not yet set the folder name')
 
-        folder_name = '{}/{}'.format(self.folder_name, 'optimization_run')
+        folder_name = '{}/{}'.format(self.folder_name, 'run_with_retraining')
         filename = '{}/{}_{:05d}'.format(folder_name, n_objects, iteration_num)
 
         # Local optimizer
         if process_num is not None:
             filename = '{}/{:03d}/{}_{:05d}'.format(
-                folder_name, process_num, n_objects, iteration_num)                
+                folder_name, process_num, n_objects, iteration_num)
 
         rgb_and_label_image_visualizer.save_image(filename)
 
@@ -501,7 +501,7 @@ class MugPipeline():
 
         self.is_correct = is_correct
         self.softmax_probabilities = probabilities.data.cpu().numpy()[0]
-        return probabilities.data.cpu().numpy()[0], is_correct
+        return probabilities.data.cpu().numpy()[0], self.is_correct
 
     def get_folder_name(self):
         return self.folder_name
@@ -509,15 +509,18 @@ class MugPipeline():
     def get_iteration_num(self):
         return self.iteration_num
 
-    def run_inference(self, poses, iteration_num=None, all_probabilities=[],
-            total_iterations=Manager().Value('d', 0), num_counterexamples=Manager().Value('d', 0),
-            model_number=Manager().Value('d', 0), model_number_lock=Lock(), counter_lock=Lock(), all_probabilities_lock=Lock(),
-            file_q=None, return_is_correct=False, respawn_when_counterex=True):
+    # def run_inference(self, poses, iteration_num=None, all_probabilities=[],
+    #         total_iterations=Manager().Value('d', 0), num_counterexamples=Manager().Value('d', 0),
+    #         model_number=Manager().Value('d', 0), model_number_lock=Lock(), counter_lock=Lock(), all_probabilities_lock=Lock(),
+    #         file_q=None, return_is_correct=False, respawn_when_counterex=True):
+    def run_inference(self, poses, iteration_num, all_probabilities,
+        total_iterations, num_counterexamples,
+        model_number, model_number_lock, counter_lock, all_probabilities_lock,
+        file_q, return_is_correct, respawn_when_counterex):
         """
         Optimizer's entry point function
         It must be a function, not an instancemethod, to work with multiprocessing
         """
-
         if iteration_num is None:
             iteration_num = self.iteration_num
 
@@ -555,8 +558,9 @@ class MugPipeline():
                 pose_is_feasible = True
 
         if not pose_is_feasible:
-            with all_probabilities_lock:
-                all_probabilities.append(np.nan)
+            all_probabilities_lock.acquire()
+            all_probabilities.append(np.nan)
+            all_probabilities_lock.release()
             return 1.01
 
         # print('before creating image', flush=True)
@@ -586,12 +590,12 @@ class MugPipeline():
 
         # print('after creating image', flush=True)
 
-        with model_number_lock:
-            model_path = os.path.join(self.package_directory,
-                '../data/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
-
+        # model_number_lock.acquire()
+        model_path = os.path.join(self.folder_name,
+            'models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
         (model, _, _) = MyNet.load_checkpoint(model_path, use_gpu=False)
         model.eval()
+        # model_number_lock.release()
 
         # print('model.eval()', flush=True)
 
@@ -608,12 +612,13 @@ class MugPipeline():
         counterexample_set_dir = os.path.join(self.folder_name, 'counterexample_set')
 
         if not is_correct:
-            if self.retrain_with_counterexamples:
+            if self.retrain_with_counterexamples and (num_counterexamples.value % 10 == 0):
+                print('found {} counterexamples, retraining'.format(num_counterexamples.value, flush=True))
+
                 training_set_dir = os.path.join(self.folder_name, 'training_set')
                 test_set_dir = os.path.join(self.folder_name, 'test_set')
                 models_dir = os.path.join(self.folder_name, 'models')
 
-                print('retraining with counterex', flush=True)
                 # Find {train, test, adversarial} set accuracy
 
                 # Training set is divided into classes
@@ -623,23 +628,22 @@ class MugPipeline():
                 imagefile_lst[-1] = 'counterex_' + imagefile_lst[-1]
                 new_imagefile = os.path.join(training_set_num_dir, imagefile_lst[-1])
 
-                with model_number_lock:
-                    model_number.value += 1
+                # model_number_lock.acquire()
+                shutil.copy(imagefile, new_imagefile)
 
-                    print('model_number: {}, imagefile: {}, training_set: {}'.format(
-                        model_number.value, imagefile, new_imagefile), flush=True)
+                new_net = MyNet(
+                    model_number.value + 1, 
+                    training_set_dir=training_set_dir,
+                    test_set_dir=test_set_dir,
+                    counterexample_set_dir=counterexample_set_dir,
+                    models_dir=models_dir)
 
-                    shutil.copy(imagefile, new_imagefile)
+                new_net.load_and_set_checkpoint(model_path)
+                new_net.train(num_epochs=50)
 
-                    new_net = MyNet(
-                        model_number.value, 
-                        training_set_dir=training_set_dir,
-                        test_set_dir=test_set_dir,
-                        counterexample_set_dir=counterexample_set_dir,
-                        models_dir=models_dir)
-
-                    new_net.load_and_set_checkpoint(model_path)
-                    new_net.train(num_epochs=50)
+                model_number_lock.acquire()
+                model_number.value += 1
+                model_number_lock.release()
             else:
                 # Not retraining, just generating counterexample set
                 if not os.path.exists(counterexample_set_dir):
@@ -655,8 +659,9 @@ class MugPipeline():
             iteration_num, probabilities, probability))
         f.close()
 
-        with all_probabilities_lock:
-            all_probabilities.append(probability)
+        all_probabilities_lock.acquire()
+        all_probabilities.append(probability)
+        all_probabilities_lock.release()
 
         if file_q:
             res = '{:05d}, {:05d}, {:1.6f}, {:1.6f}, {:1.6f}, {:1.6f}, {:1.6f}, {:1d}, {},'.format(
@@ -665,16 +670,17 @@ class MugPipeline():
                 is_correct, time.time())
             file_q.put(res)
 
-        with counter_lock:
-            total_iterations.value += 1
+        counter_lock.acquire()
+        total_iterations.value += 1
 
-            if not is_correct:
-                num_counterexamples.value += 1
+        if not is_correct:
+            num_counterexamples.value += 1
 
-            if (self.max_counterexamples is not None and
-                num_counterexamples.value >= self.max_counterexamples):
-                print('found {} counterexamples'.format(num_counterexamples.value))
-                raise FoundMaxCounterexamples
+        if (self.max_counterexamples is not None and
+            num_counterexamples.value >= self.max_counterexamples):
+            print('found {} counterexamples'.format(num_counterexamples.value))
+            raise FoundMaxCounterexamples
+        counter_lock.release()
 
         # if (self.optimizer_type == OptimizerType.NELDER_MEAD or
         #         self.optimizer_type == OptimizerType.SLSQP):

@@ -63,21 +63,21 @@ def predict_image(model, image_path, num_mugs):
         word = 'is'
         s = ''
 
-    print('there {} {} mug{}'.format(word, classes[index], s))
+    # print('there {} {} mug{}'.format(word, classes[index], s))
 
     if classes[index] != num_mugs:
-        print('WRONG, the actual number of mugs is {}!'.format(num_mugs))
+        # print('WRONG, the actual number of mugs is {}!'.format(num_mugs))
         global wrong_num
         wrong_num += 1
     else:
-        print('this is correct')
+        # print('this is correct')
         global correct_num
         correct_num += 1
 
     return index
 
 def main():
-    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/experiment1/models/mug_numeration_classifier_001.pth.tar'
+    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/mug_numeration_classifier_000.pth.tar'
     checkpoint = torch.load(path)
 
     model = SimpleNet(num_classes=5)
@@ -97,14 +97,21 @@ def main():
     # path = '/home/maggiewang/Workspace/robust_perception/robust_perception/dataset_generation/images/classification_clean/training_set/3'
     # path = '/home/maggiewang/Workspace/robust_perception/robust_perception/optimization/data_rbfopt'
 
-    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/experiment1/counterexample_set/3'
+    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/retrained_with_counterexamples/cma_es/counterexample_set/3'
 
+    correct_files = []
     for file in os.listdir(path):
         # print(file)
         if file.endswith(".png"):
-            print('file: {}'.format(file))
+            # print('file: {}'.format(file))
             index = predict_image(model, os.path.join(path, file), num_mugs=3)
+            if index == 2:
+                correct_files.append(file)
+                # print(file)
         # print('index: {}'.format(index))
+
+    print('correct_files:', correct_files)
+    print(len(correct_files))
 
     print('correct_num: {}, wrong_num: {}'.format(correct_num, wrong_num))
 

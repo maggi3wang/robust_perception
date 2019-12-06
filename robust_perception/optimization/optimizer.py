@@ -52,8 +52,8 @@ class Optimizer():
     def __init__(self, num_mugs, mug_lower_bound, mug_upper_bound,
             max_iterations, max_time, max_counterexamples, num_processes,
             retrain_with_counterexamples, mug_initial_poses=[]):
-        # torch.multiprocessing.set_start_method('spawn')
 
+        torch.multiprocessing.set_start_method('spawn')
         self.mug_initial_poses = mug_initial_poses
 
         self.mug_lower_bounds = []
@@ -105,13 +105,14 @@ class Optimizer():
         """
         Wrapper for optimizer's entry point function
         """
-        print('at beg of run_inference iter {}'.format(iteration_num), flush=True)
-
-        prob = mug_pipeline.run_inference(
-            poses, iteration_num, all_probabilities, total_iterations,
-            num_counterexamples, model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q)
-
-        print('at end of run_inference iter {}'.format(iteration_num), flush=True)
+        try:
+            prob = mug_pipeline.run_inference(
+                poses, iteration_num, all_probabilities, total_iterations,
+                num_counterexamples, model_number, model_number_lock, counter_lock,
+                all_probabilities_lock, file_q, False, True)
+        except Exception as e:
+            print('exception {} occurred'.format(type(e).__name__))
+            raise e
 
         return prob
 
@@ -131,7 +132,8 @@ class Optimizer():
         # else:
         #     folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/initial_optimization_run')
 
-        folder_name = os.path.join(self.package_directory, '../data/optimization_comparisons/cma_es')
+        # folder_name = os.path.join(self.package_directory, '../data/optimization_comparisons/cma_es')
+        folder_name = os.path.join(self.package_directory, '../data/retrained_with_counterexamples/cma_es')
         self.mug_pipeline.set_folder_name(folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.PYCMA)
 
@@ -139,13 +141,10 @@ class Optimizer():
 
         for i in range(self.num_mugs):
             self.mug_initial_poses += \
-                RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
                 [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
 
         print(self.mug_initial_poses)
-
-        es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0,
-            {'bounds': [-1.0, 1.0], 'verb_disp': 1, 'popsize': self.num_processes})
 
         iter_num = 0
 
@@ -172,28 +171,36 @@ class Optimizer():
 
         # TODO: share GPU for inference using model.share_memory()
 
+        es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0,
+                {'bounds': [-1.0, 1.0], 'verb_disp': 1, 'popsize': self.num_processes})
+
         while not es.stop():
             try:
                 ep = EvalParallel3(self.run_inference, number_of_processes=self.num_processes)
                 lst = range(iter_num, iter_num + self.num_processes)
-                print('lst: {}'.format(lst))
                 X = es.ask()
                 elapsed_time = time.time() - start_time
-                ep(X, lst=lst, args=(self.mug_pipeline, self.all_probabilities,
+                jobs = ep(X, lst=lst, args=(self.mug_pipeline, self.all_probabilities,
                     self.total_iterations, self.num_counterexamples,
                     self.model_number, model_number_lock, counter_lock,
-                    all_probabilities_lock, file_q),
-                    timeout=(self.max_time - elapsed_time))
-                print('after ep', flush=True)
-            except torch.multiprocessing.context.TimeoutError:
-                print('timed out!', flush=True)
-                break
+                    all_probabilities_lock, file_q))
+            except FoundCounterexample:
+                print('FOUND COUNTEREXAMPLE EXCEPTION', flush=True)
+                self.mug_initial_poses = []
+
+                for i in range(self.num_mugs):
+                    self.mug_initial_poses += \
+                        RollPitchYaw(np.random.uniform(0., 2.*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                        [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+
+                es = cma.CMAEvolutionStrategy(self.mug_initial_poses, 1.0/3.0,
+                    {'bounds': [-1.0, 1.0], 'verb_disp': 1, 'popsize': self.num_processes})
+            # except torch.multiprocessing.context.TimeoutError:
+            #     print('timed out!', flush=True)
+            #     break
             except FoundMaxCounterexamples:
                 print('found {} counterexamples!'.format(self.max_counterexamples))
                 break
-            except Exception as e:
-                print("Unhandled exception ", e)
-                raise
             except:
                 print("Unhandled unnamed exception in pycma")
                 raise

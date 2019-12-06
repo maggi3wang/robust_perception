@@ -87,9 +87,9 @@ def run_global_optimizers():
         num_mugs=num_mugs, 
         mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
         max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
-        num_processes=1, retrain_with_counterexamples=False)
-    optimizer.run_rbfopt()
-
+        num_processes=30, retrain_with_counterexamples=True)
+    # optimizer.run_rbfopt()
+    optimizer.run_pycma()
 
 def main():
     """
@@ -101,6 +101,7 @@ def main():
     # train_initial_model()
 
     # run_local_optimizers()
+    
     run_global_optimizers()
 
 if __name__ == "__main__":

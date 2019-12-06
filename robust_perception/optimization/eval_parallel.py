@@ -26,6 +26,7 @@ class EvalParallel3(object):
             warnings.warn(warning_str)
         jobs = [self.pool.apply_async(fitness_function, (x,iter_num) + args)
                 for x, iter_num in zip(solutions, lst)]
+
         try:
             return [job.get(timeout) for job in jobs]
         except:

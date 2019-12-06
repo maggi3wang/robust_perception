@@ -80,7 +80,6 @@ class MyNet():
         # Create model, optimizer, and loss function
         num_mugs = 5
         self.model = SimpleNet(num_classes=num_mugs)
-        print('created a model')
 
         if self.cuda_avail:
             cuda.init()
@@ -121,12 +120,6 @@ class MyNet():
         optimizer = Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
         if os.path.isfile(filename):
-            # device = torch.device("cuda")
-            # model.load_state_dict(torch.load(filename)['state_dict'])
-            # optimizer.load_state_dict(torch.load(filename)['optimizer'])
-
-            # model.to(device)
-
             if use_gpu:
                 checkpoint = torch.load(filename)
             else:
