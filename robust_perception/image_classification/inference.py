@@ -63,7 +63,7 @@ def predict_image(model, image_path, num_mugs):
         word = 'is'
         s = ''
 
-    # print('there {} {} mug{}'.format(word, classes[index], s))
+    print('there {} {} mug{}'.format(word, classes[index], s))
 
     if classes[index] != num_mugs:
         # print('WRONG, the actual number of mugs is {}!'.format(num_mugs))
@@ -77,7 +77,7 @@ def predict_image(model, image_path, num_mugs):
     return index
 
 def main():
-    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/mug_numeration_classifier_000.pth.tar'
+    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/retrained_with_counterexamples/cma_es/models/mug_numeration_classifier_003.pth.tar'
     checkpoint = torch.load(path)
 
     model = SimpleNet(num_classes=5)

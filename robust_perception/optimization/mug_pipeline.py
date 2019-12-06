@@ -612,7 +612,7 @@ class MugPipeline():
         counterexample_set_dir = os.path.join(self.folder_name, 'counterexample_set')
 
         if not is_correct:
-            if self.retrain_with_counterexamples and (num_counterexamples.value % 10 == 0):
+            if self.retrain_with_counterexamples:
                 print('found {} counterexamples, retraining'.format(num_counterexamples.value, flush=True))
 
                 training_set_dir = os.path.join(self.folder_name, 'training_set')
@@ -631,19 +631,20 @@ class MugPipeline():
                 # model_number_lock.acquire()
                 shutil.copy(imagefile, new_imagefile)
 
-                new_net = MyNet(
-                    model_number.value + 1, 
-                    training_set_dir=training_set_dir,
-                    test_set_dir=test_set_dir,
-                    counterexample_set_dir=counterexample_set_dir,
-                    models_dir=models_dir)
+                if num_counterexamples.value % 10 == 0:
+                    new_net = MyNet(
+                        model_number.value + 1, 
+                        training_set_dir=training_set_dir,
+                        test_set_dir=test_set_dir,
+                        counterexample_set_dir=counterexample_set_dir,
+                        models_dir=models_dir)
 
-                new_net.load_and_set_checkpoint(model_path)
-                new_net.train(num_epochs=50)
+                    new_net.load_and_set_checkpoint(model_path)
+                    new_net.train(num_epochs=50)
 
-                model_number_lock.acquire()
-                model_number.value += 1
-                model_number_lock.release()
+                    model_number_lock.acquire()
+                    model_number.value += 1
+                    model_number_lock.release()
             else:
                 # Not retraining, just generating counterexample set
                 if not os.path.exists(counterexample_set_dir):
