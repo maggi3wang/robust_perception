@@ -1,0 +1,2 @@
+epoch, training_loss, training_acc, test_acc, counterexample_acc, is_new_best,
+  0, 0.0, 0.9988820570150923, 0.9843333333333333, 0.0, 1,

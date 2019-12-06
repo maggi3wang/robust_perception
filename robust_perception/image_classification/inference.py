@@ -77,7 +77,8 @@ def predict_image(model, image_path, num_mugs):
     return index
 
 def main():
-    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/retrained_with_counterexamples/cma_es/models/mug_numeration_classifier_003.pth.tar'
+    # path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/retrained_with_counterexamples/cma_es/models/mug_numeration_classifier_003.pth.tar'
+    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/retrained_with_counterexamples/cma_es/models/mug_numeration_classifier_000.pth.tar'
     checkpoint = torch.load(path)
 
     model = SimpleNet(num_classes=5)
@@ -97,23 +98,23 @@ def main():
     # path = '/home/maggiewang/Workspace/robust_perception/robust_perception/dataset_generation/images/classification_clean/training_set/3'
     # path = '/home/maggiewang/Workspace/robust_perception/robust_perception/optimization/data_rbfopt'
 
-    path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/retrained_with_counterexamples/cma_es/counterexample_set/3'
-
     correct_files = []
-    for file in os.listdir(path):
-        # print(file)
-        if file.endswith(".png"):
-            # print('file: {}'.format(file))
-            index = predict_image(model, os.path.join(path, file), num_mugs=3)
-            if index == 2:
-                correct_files.append(file)
-                # print(file)
-        # print('index: {}'.format(index))
 
-    print('correct_files:', correct_files)
-    print(len(correct_files))
+    for i in range(1, 6):
+        path = '/home/maggiewang/Workspace/robust_perception/robust_perception/data/retrained_with_counterexamples/cma_es_incorrectlycopiedcounterexs/counterexample_set/{}'.format(i)
+        for file in os.listdir(path):
+            # print(file)
+            if file.endswith(".png"):
+                # print('file: {}'.format(file))
+                index = predict_image(model, os.path.join(path, file), num_mugs=i)
+                # if index == 2:
+                    # correct_files.append(file)
+
+    # print('correct_files:', correct_files)
+    # print(len(correct_files))
 
     print('correct_num: {}, wrong_num: {}'.format(correct_num, wrong_num))
+    print('percent corr: {}'.format(1.0 * correct_num/(wrong_num+correct_num)))
 
     # imagepath = os.path.join(os.getcwd(), imagefile)
 

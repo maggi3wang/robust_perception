@@ -146,7 +146,7 @@ class Optimizer():
 
         print(self.mug_initial_poses)
 
-        iter_num = 0
+        iter_num = 10440
 
         start_time = time.time()
         elapsed_time = 0
@@ -155,10 +155,10 @@ class Optimizer():
         self.all_probabilities = manager.list()
         all_probabilities_lock = manager.Lock()
 
-        self.total_iterations = manager.Value('d', 0)
-        self.num_counterexamples = manager.Value('d', 0)
+        self.total_iterations = manager.Value('d', 10440)
+        self.num_counterexamples = manager.Value('d', 30)
 
-        self.model_number = manager.Value('d', 0)
+        self.model_number = manager.Value('d', 3)
         model_number_lock = manager.Lock()
 
         counter_lock = manager.Lock()

@@ -13,10 +13,10 @@ def train_initial_model():
     Run initial model training
     """
 
-    models_dir = '../data/experiment1/models'
-    training_set_dir = '../data/experiment1/training_set'
-    test_set_dir = '../data/experiment1/test_set'
-    counterexample_set_dir = '../data/experiment1/counterexample_set'
+    models_dir = '../data/retrained_with_counterexamples/cma_es_incorrectlycopiedcounterexs/models'
+    training_set_dir = '../data/retrained_with_counterexamples/cma_es_incorrectlycopiedcounterexs/training_set'
+    test_set_dir = '../data/retrained_with_counterexamples/cma_es_incorrectlycopiedcounterexs/test_set'
+    counterexample_set_dir = '../data/retrained_with_counterexamples/cma_es_incorrectlycopiedcounterexs/counterexample_set'
 
     net = MyNet(model_file_number=0, models_dir=models_dir, training_set_dir=training_set_dir,
         test_set_dir=test_set_dir, counterexample_set_dir=counterexample_set_dir)
@@ -98,11 +98,11 @@ def main():
 
     # Find held-out set of counterexamples
 
-    # train_initial_model()
+    train_initial_model()
 
     # run_local_optimizers()
     
-    run_global_optimizers()
+    # run_global_optimizers()
 
 if __name__ == "__main__":
     main()

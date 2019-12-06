@@ -10,7 +10,7 @@ def model_accuracy_over_counterexamples():
         'counterexample_acc', 'is_new_best', 'blank']
 
     package_directory = os.path.dirname(os.path.abspath(__file__))
-    models_dir = os.path.join(package_directory, '../data/experiment1/models')
+    models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/cma_es/models')
 
     final_training_accs = []
     final_test_accs = []
@@ -21,7 +21,8 @@ def model_accuracy_over_counterexamples():
         filename = os.path.join(models_dir, file)
 
         if filename.endswith('.csv'):
-            data = pandas.read_csv(filename, delimiter=',', names=col_names, header=1)
+            data = pandas.read_csv(filename, delimiter=',', names=col_names, header=0)
+            print('filename', filename)
 
             # automate this / clean up
             model_epoch = data.epoch.to_numpy().astype(int)
@@ -53,7 +54,7 @@ def model_accuracy_over_counterexamples():
     axes[1].plot(final_counterexample_accs, color='b', label='Counterexample accuracies')
 
     axes[1].set_xlim([0, len(final_training_accs) - 1])
-    axes[1].set_ylim([0.0, 0.05])
+    axes[1].set_ylim([0.0, 1.0])
     axes[1].set_xlabel('Number of Counterexamples Added')
 
     for axis in axes:
