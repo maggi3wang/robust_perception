@@ -14,3 +14,5 @@
 
 ----------
 predicted 4 mugs - WRONG, the actual number of mugs is 3!
+----------
+iteration: 53654, probabilities: [0.000374 0.000075 0.127105 0.639863 0.232584], probability: 0.1271047443151474
