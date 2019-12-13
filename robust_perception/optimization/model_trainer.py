@@ -24,7 +24,7 @@ from ..image_classification.simple_net import SimpleNet
 
 
 class MyNet():
-    def __init__(self, model_file_number, models_dir, training_set_dir, test_set_dir, counterexample_set_dir):
+    def __init__(self, model_file_number, models_dir, training_set_dir, test_set_dir, counterexample_set_dir, num_workers=0):
         self.model_file_number = model_file_number
 
         # Transformation for image
@@ -53,14 +53,16 @@ class MyNet():
         test_dataset = datasets.ImageFolder(root=test_set_dir, transform=plain_transform)
         counterexample_dataset = datasets.ImageFolder(root=counterexample_set_dir, transform=plain_transform)
 
+        self.batch_size = 4
+
         self.train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=4, shuffle=True, num_workers=0)
+            train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=num_workers)
 
         self.test_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=4, shuffle=True, num_workers=0)
+            test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers)
 
         self.counterexample_loader = torch.utils.data.DataLoader(
-            counterexample_dataset, batch_size=4, shuffle=True, num_workers=0)
+            counterexample_dataset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers)
 
         self.training_set_size = len(train_dataset)
         self.test_set_size = len(test_dataset)
@@ -78,8 +80,8 @@ class MyNet():
         self.cuda_avail = torch.cuda.is_available()
 
         # Create model, optimizer, and loss function
-        num_mugs = 5
-        self.model = SimpleNet(num_classes=num_mugs)
+        self.num_classes = 5
+        self.model = SimpleNet(num_classes=self.num_classes)
 
         if self.cuda_avail:
             cuda.init()
@@ -168,7 +170,10 @@ class MyNet():
         """
 
         self.model.eval()
-        test_acc = 0.0
+        overall_acc = 0.0
+        class_correct = list(0.0 for i in range(self.num_classes))
+        class_total = list(0.0 for i in range(self.num_classes))
+        class_acc = list(0.0 for i in range(self.num_classes))
 
         # Iterate over the test loader
         for i, (images, labels) in enumerate(loader):
@@ -183,17 +188,28 @@ class MyNet():
             # Pick max prediction
             _, prediction = torch.max(outputs.data, 1)
 
-            prediction_np = prediction.cpu().numpy()
-            labels_np = labels.data.cpu().numpy()
-            images_np = images.data.cpu().numpy()
+            # prediction_np = prediction.cpu().numpy()
+            # labels_np = labels.data.cpu().numpy()
+            # images_np = images.data.cpu().numpy()
 
             # Compare to actual class to obtain accuracy
-            test_acc += torch.sum(prediction == labels.data).float()
+            overall_acc += torch.sum(prediction == labels.data).float()
+            c = (prediction == labels.data)
+
+            for i in range(len(c)):
+                label = labels.data[i]
+                class_correct[label] += c[i].item()
+                class_total[label] += 1
+
+        for i in range(self.num_classes):
+            if class_total[i] > 0:
+                print('Accuracy of {} mugs: {}'.format(i+1, class_correct[i]/class_total[i]))
+                class_acc[i] = class_correct[i]/class_total[i]
 
         # Compute the average acc and loss over all test images
-        test_acc = test_acc / set_size
+        overall_acc = overall_acc / set_size
 
-        return test_acc
+        return overall_acc, class_acc
 
     def train(self, num_epochs):
         """
@@ -204,17 +220,17 @@ class MyNet():
 
         model_accuracies_csv = os.path.join(self.models_dir, 'model_{:03d}.csv'.format(self.model_file_number))
         f = open(model_accuracies_csv, 'w')
-        f.write('epoch, training_loss, training_acc, test_acc, counterexample_acc, is_new_best,\n')
+        f.write('epoch, training_loss, training_acc, test_acc, counterex_acc, is_new_best, test_class_1, test_class_2, test_class_3, test_class_4, test_class_5, counterex_class_3,\n')
         f.flush()
 
         best_acc = 0.0
 
         for epoch in range(num_epochs):
-            self.model.train()
             train_acc = 0.0
             train_loss = 0.0
 
             for i, (images, labels) in enumerate(self.train_loader):
+                self.model.train()
                 # Move images and labels to gpu if available
                 if self.cuda_avail:
                     images = Variable(images.cuda())
@@ -248,8 +264,10 @@ class MyNet():
             train_loss = train_loss / self.training_set_size
 
             # Evaluate on the test set
-            test_acc = self.evaluate_accuracy(self.test_loader, self.test_set_size)
-            counterexample_acc = self.evaluate_accuracy(self.counterexample_loader, self.counterexample_set_size)
+            print('test acc')
+            test_acc, test_class_accs = self.evaluate_accuracy(self.test_loader, self.test_set_size)
+            print('counterex acc')
+            counterexample_acc, counterexample_class_accs = self.evaluate_accuracy(self.counterexample_loader, self.counterexample_set_size)
 
             # Print the metrics
             # print("Epoch {}, Train Accuracy: {}, Train Loss: {}, Test Accuracy: {},"
@@ -260,8 +278,10 @@ class MyNet():
             # self.test_accuracies.append(test_acc)
             # self.counterexample_accuracies.append(counterexample_acc)
 
-            f.write('{:3d}, {:2.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1d},\n'.format(
-                epoch, train_loss, train_acc, test_acc, counterexample_acc, test_acc > best_acc))
+            f.write('{:3d}, {:2.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1d}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f},\n'.format(
+                epoch, train_loss, train_acc, test_acc, counterexample_acc, test_acc > best_acc,
+                test_class_accs[0], test_class_accs[1], test_class_accs[2], test_class_accs[3], test_class_accs[4],
+                counterexample_class_accs[2]))
             f.flush()
 
             # Save the model if the test acc is greater than our current best

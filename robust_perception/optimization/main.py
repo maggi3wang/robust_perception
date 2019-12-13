@@ -13,13 +13,13 @@ def train_initial_model():
     Run initial model training
     """
 
-    models_dir = '../data/retrained_with_counterexamples/cma_es_incorrectlycopiedcounterexs/models'
-    training_set_dir = '../data/retrained_with_counterexamples/cma_es_incorrectlycopiedcounterexs/training_set'
-    test_set_dir = '../data/retrained_with_counterexamples/cma_es_incorrectlycopiedcounterexs/test_set'
-    counterexample_set_dir = '../data/retrained_with_counterexamples/cma_es_incorrectlycopiedcounterexs/counterexample_set'
+    models_dir = '../data/retrained_with_counterexamples/initial_training/models'
+    training_set_dir = '../data/retrained_with_counterexamples/initial_training/training_set'
+    test_set_dir = '../data/retrained_with_counterexamples/initial_training/test_set'
+    counterexample_set_dir = '../data/retrained_with_counterexamples/initial_training/counterexample_set'
 
     net = MyNet(model_file_number=0, models_dir=models_dir, training_set_dir=training_set_dir,
-        test_set_dir=test_set_dir, counterexample_set_dir=counterexample_set_dir)
+        test_set_dir=test_set_dir, counterexample_set_dir=counterexample_set_dir, num_workers=10)
     net.train(num_epochs=50)
 
 def run_landscape_experiment():
