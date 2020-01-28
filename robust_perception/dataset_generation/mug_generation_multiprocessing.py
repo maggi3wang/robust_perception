@@ -59,19 +59,19 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         self.rgb_image_input_port = \
             self.DeclareAbstractInputPort("rgb_image_input_port",
                 AbstractValue.Make(PydrakeImage[PixelType.kRgba8U](640, 480, 3)))
-        self.label_image_input_port = \
-            self.DeclareAbstractInputPort("label_image_input_port",
-                AbstractValue.Make(PydrakeImage[PixelType.kLabel16I](640, 480, 1)))
+        # self.label_image_input_port = \
+        #     self.DeclareAbstractInputPort("label_image_input_port",
+        #         AbstractValue.Make(PydrakeImage[PixelType.kLabel16I](640, 480, 1)))
 
         self.color_image = None
-        self.label_image = None
+        # self.label_image = None
 
     def DoPublish(self, context, event):
         """
         Update color_image and label_image for saving
         """
         self.color_image = self.EvalAbstractInput(context, 0).get_value()
-        self.label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
+        # self.label_image = self.EvalAbstractInput(context, 1).get_mutable_value()
 
     def save_image(self, filename):
         """
@@ -82,28 +82,104 @@ class RgbAndLabelImageVisualizer(LeafSystem):
         color_fig.axes.get_xaxis().set_visible(False)
         color_fig.axes.get_yaxis().set_visible(False)
         plt.savefig(filename + '_color.png', bbox_inches='tight', pad_inches=0)
+        print('saving {}'.format(filename))
 
-        label_fig = plt.imshow(np.squeeze(self.label_image.data))
-        plt.axis('off')
-        label_fig.axes.get_xaxis().set_visible(False)
-        label_fig.axes.get_yaxis().set_visible(False)
-        plt.savefig(filename + '_label.png', bbox_inches='tight', pad_inches=0)
+        # label_fig = plt.imshow(np.squeeze(self.label_image.data))
+        # plt.axis('off')
+        # label_fig.axes.get_xaxis().set_visible(False)
+        # label_fig.axes.get_yaxis().set_visible(False)
+        # plt.savefig(filename + '_label.png', bbox_inches='tight', pad_inches=0)
+
+def blockPrint():
+    """
+    Disable print
+    """
+    sys.stdout = open(os.devnull, 'w')
+
+def enablePrint():
+    """
+    Enable print
+    """
+    sys.stdout = sys.__stdout__
 
 class GenerationWorker(object):
     """Multiprocess worker."""
 
     def __init__(self, output_queue=None):
         self.output_queue = output_queue
+        self.package_directory = os.path.dirname(os.path.abspath(__file__))
+        self.num_mugs = 5
+        self.meshcat_visualizer_desired = True
+        self.initial_poses = None
+        self.final_poses = None
 
+    def run_meshcat_visualizer(self, builder, scene_graph):
+        # Add meshcat visualizer
+        # blockPrint()
+        visualizer = builder.AddSystem(MeshcatVisualizer(
+            scene_graph,
+            zmq_url="tcp://127.0.0.1:6000",
+            draw_period=0.001))
+        builder.Connect(scene_graph.get_pose_bundle_output_port(),
+                visualizer.get_input_port(0))
+        # enablePrint()
+
+    # def write_poses_to_file(self, filename, q0, q0_final):
+    #     self.metadata_filename = filename + '_metadata.txt'
+    #     f = open(self.metadata_filename, "w+")
+
+    #     self.after_solver_poses = q0.flatten()
+    #     self.final_poses = q0_final.flatten()
+
+    #     def divide_chunks(l, n):     
+    #         # looping till length l 
+    #         for i in range(0, len(l), n):  
+    #             yield l[i:i + n] 
+
+    #     n = 7
+
+    #     print(self.initial_poses)
+    #     print(self.after_solver_poses)
+    #     print(self.final_poses)
+
+    #     self.initial_poses = list(divide_chunks(self.initial_poses, n))
+    #     self.after_solver_poses = list(divide_chunks(self.after_solver_poses, n))
+    #     self.final_poses = list(divide_chunks(self.final_poses, n))
+
+    #     for pose in self.initial_poses:
+    #         for count, item in enumerate(pose): 
+    #             f.write("%8.8f " % item)
+    #         f.write("\n")
+
+    #     f.write('\n----------\n')
+
+    #     for pose in self.after_solver_poses:
+    #         for count, item in enumerate(pose): 
+    #             f.write("%8.8f " % item)
+    #         f.write("\n")
+
+    #     f.write('\n----------\n')
+
+    #     for pose in self.final_poses:
+    #         for count, item in enumerate(pose): 
+    #             f.write("%8.8f " % item)
+    #         f.write("\n")
+
+    #     f.close()
+
+    # def create_image(self, iteration_num, process_num=None):
     def __call__(self, iter_num):
-        # print('trying to do {}'.format(iter_num))
-        np.random.seed(int(codecs.encode(os.urandom(4), 'hex'), 32) & (2**32 - 1))
-        random.seed(os.urandom(4))
-
-        max_n_objects = 5
-        package_directory = os.path.dirname(os.path.abspath(__file__))
+        """
+        Create image based on initial poses
+        """
 
         try:
+            # np.random.seed(46)
+            # random.seed(46)
+            np.random.seed(int(codecs.encode(os.urandom(4), 'hex'), 32) & (2**32 - 1))
+            random.seed(os.urandom(4))
+            filename = ''
+
             builder = DiagramBuilder()
             mbp, scene_graph = AddMultibodyPlantSceneGraph(
                 builder, MultibodyPlant(time_step=0.0001))
@@ -128,11 +204,13 @@ class GenerationWorker(object):
 
             parser = Parser(mbp, scene_graph)
 
+            os.path.join(self.package_directory, '../image_classification/')
+
             candidate_model_files = [
-                os.path.join(package_directory, '../dataset_generation/mug_clean/mug.urdf')
+                os.path.join(self.package_directory, '../dataset_generation/mug_clean/mug.urdf')
             ]
 
-            n_objects = (iter_num % max_n_objects) + 1
+            n_objects = (iter_num % self.num_mugs) + 1
             poses = []  # [quat, pos]
             classes = []
             for k in range(n_objects):
@@ -146,30 +224,27 @@ class GenerationWorker(object):
                     [np.random.uniform(-0.1, 0.1),
                      np.random.uniform(-0.1, 0.1),
                      np.random.uniform(0.1, 0.2)]])
+                # poses.append(
+                #     [np.array(
+                #         [self.initial_poses[7*k + 0], self.initial_poses[7*k + 1],
+                #         self.initial_poses[7*k + 2], self.initial_poses[7*k + 3]]),
+                #         self.initial_poses[7*k + 4], self.initial_poses[7*k + 5],
+                #         self.initial_poses[7*k + 6]])
 
             mbp.Finalize()
 
-            # print(poses)
+            print('poses: {}'.format(poses), flush=True)
 
-            # Add meshcat visualizer
-            # blockPrint()
-            # visualizer = builder.AddSystem(MeshcatVisualizer(
-            #     scene_graph,
-            #     zmq_url="tcp://127.0.0.1:6000",
-            #     draw_period=0.001))
-            # builder.Connect(scene_graph.get_pose_bundle_output_port(),
-            #         visualizer.get_input_port(0))
-            # enablePrint()
+            if self.meshcat_visualizer_desired:
+                self.run_meshcat_visualizer(builder, scene_graph)
 
             # Add camera
             depth_camera_properties = DepthCameraProperties(
-                width=1000, height=1000, fov_y=np.pi/2, renderer_name="renderer",
-                z_near=0.1, z_far=2.0)
+                width=1000, height=1000, fov_y=np.pi/2, renderer_name="renderer", z_near=0.1, z_far=2.0)
             parent_frame_id = scene_graph.world_frame_id()
             camera_tf = RigidTransform(p=[0.0, 0.0, 0.95], rpy=RollPitchYaw([0, np.pi, 0]))
             camera = builder.AddSystem(
-                RgbdSensor(parent_frame_id, camera_tf,
-                    depth_camera_properties, show_window=False))
+                RgbdSensor(parent_frame_id, camera_tf, depth_camera_properties, show_window=False))
             camera.DeclarePeriodicPublish(0.1, 0.)
             builder.Connect(scene_graph.get_query_output_port(),
                             camera.query_object_input_port())
@@ -178,8 +253,8 @@ class GenerationWorker(object):
             camera_viz = builder.AddSystem(rgb_and_label_image_visualizer)
             builder.Connect(camera.color_image_output_port(),
                             camera_viz.get_input_port(0))
-            builder.Connect(camera.label_image_output_port(),
-                            camera_viz.get_input_port(1))
+            # builder.Connect(camera.label_image_output_port(),
+            #                 camera_viz.get_input_port(1))
 
             diagram = builder.Build()
 
@@ -195,12 +270,11 @@ class GenerationWorker(object):
                 q0[(offset):(offset+4)] = poses[k][0]
                 q0[(offset+4):(offset+7)] = poses[k][1]
 
-            initial_poses = q0.flatten()
-
             simulator = Simulator(diagram, diagram_context)
             # simulator.set_target_realtime_rate(1.0)
             simulator.set_publish_every_time_step(False)
             simulator.Initialize()
+            print('initialized simulator', flush=True)
 
             ik = InverseKinematics(mbp, mbp_context)
             q_dec = ik.q()
@@ -230,7 +304,7 @@ class GenerationWorker(object):
             prog.AddQuadraticErrorCost(np.eye(q0.shape[0])*1.0, q0, q_dec)
 
             ik.AddMinimumDistanceConstraint(0.001, threshold_distance=1.0)
-
+            
             prog.SetInitialGuess(q_dec, q0)
             start_time = time.time()
             solver = SnoptSolver()
@@ -244,16 +318,18 @@ class GenerationWorker(object):
             # print("Solver opts: ", prog.GetSolverOptions(solver.solver_type()))
             # print(type(prog))
             result = mp.Solve(prog)
-            # print("Solve info: ", result)
+            # print("Solve info: {}".format(result), flush=True)
             # print("Solved in %f seconds" % (time.time() - start_time))
             # print(result.get_solver_id().name())
             q0_proj = result.GetSolution(q_dec)
             mbp.SetPositions(mbp_context, q0_proj)
             q0_initial = q0_proj.copy()
-            # print('q0_initial: ', q0_initial)
+            print('q0_initial: {}'.format(q0_initial), flush=True)
 
             converged = False
             t = 0.1
+
+            start_time = time.time()
 
             while not converged:
                 simulator.AdvanceTo(t)
@@ -267,60 +343,46 @@ class GenerationWorker(object):
                 if np.linalg.norm(velocities) < 0.05:
                     converged = True
 
+                # If haven't timed out in 5 min, just set converged = True
+
+                if (time.time() - start_time) > 5 * 60:
+                    converged = True
+                    print('TIMED OUT IN FORWARD SIMULATION!', flush=True)
+                    raise ForwardSimulationTimedOut
+
+            # print('t: {}'.format(t))
             q0_final = mbp.GetPositions(mbp_context).copy()
-            # print('q0_final: ', q0_final)
+            print('q0_final: {}'.format(q0_final), flush=True)
+
+            print ('diff: {}'.format(np.linalg.norm(q0_final - q0_initial)))
 
             filename = 'robust_perception/dataset_generation/images1/classification/{}/{}_{:05d}'.format(
                 n_objects, n_objects, iter_num)
-            
+
             rgb_and_label_image_visualizer.save_image(filename)
 
-            metadata_filename = filename + '_metadata.txt'
-            f = open(metadata_filename, "w+")
+            # Write to a file
+            self.write_poses_to_file(filename, q0, q0_final)
 
-            after_solver_poses = q0_initial.flatten()
-            final_poses = q0_final.flatten()
+            if q0_final[-1] < 0:
+                print('POSE IS NOT CONSTRAINED', flush=True)
+                raise NotConstrained
 
-            def divide_chunks(l, n):     
-                # looping till length l 
-                for i in range(0, len(l), n):  
-                    yield l[i:i + n] 
+            # print('DONE with iteration {}!'.format(self.iteration_num))
 
-            n = 7
+            # except:
+            #     print("Unhandled unnamed exception, probably sim error", flush=True)
+            #     raise
 
-            initial_poses = list(divide_chunks(initial_poses, n))
-            after_solver_poses = list(divide_chunks(after_solver_poses, n))
-            final_poses = list(divide_chunks(final_poses, n))
-
-            for pose in initial_poses:
-                for count, item in enumerate(pose):
-                    f.write("%8.8f " % item)
-                f.write("\n")
-
-            f.write('\n----------\n')
-
-            for pose in after_solver_poses:
-                for count, item in enumerate(pose): 
-                    f.write("%8.8f " % item)
-                f.write("\n")
-
-            f.write('\n----------\n')
-
-            for pose in final_poses:
-                for count, item in enumerate(pose): 
-                    f.write("%8.8f " % item)
-                f.write("\n")
-
-            f.close()
-
-            # print('DONE with iteration {}!'.format(iter_num))
-            print("{} ".format(iter_num))
+            return filename
 
         except Exception as e:
             print("Unhandled exception ", e)
+            raise e
 
         except:
             print("Unhandled unnamed exception, probably sim error")
+            raise
 
 
 if __name__ == "__main__":
@@ -329,17 +391,15 @@ if __name__ == "__main__":
     
     start_time = time.time()
 
-    num_workers = 20
+    num_workers = 1
     pool = Pool(num_workers)
     manager = Manager()
 
     output_queue = manager.Queue()
-    start_iteration_num = 6988
-    end_iteration_num = 10000
+    start_iteration_num = 0
+    end_iteration_num = 100
     total_num_iterations = end_iteration_num - start_iteration_num
     assert(total_num_iterations > 0)
-
-    # 4_06988_color
 
     result = pool.map(GenerationWorker(output_queue=output_queue), range(start_iteration_num, end_iteration_num))
 

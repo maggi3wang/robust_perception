@@ -1,5 +1,6 @@
 from pydrake.math import (RollPitchYaw, RigidTransform)
 import numpy as np
+import os
 
 from ..optimization.optimizer import OptimizerType
 from ..optimization.optimizer import Optimizer
@@ -72,8 +73,9 @@ def run_local_optimizers():
     # optimizer.run_random_sample()
     # optimizer.plot_graphs()
 
-def run_global_optimizers():
-    max_sec = 5 * 60 * 60           # 5 hours
+def run_global_optimizers(generate_counterexample_set=False):
+    # max_sec = 5 * 60 * 60           # 5 hours
+    max_sec = None
     max_counterexamples = None
     max_iterations = None
 
@@ -82,14 +84,38 @@ def run_global_optimizers():
     mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
 
     num_mugs = 3
-    
+
+    package_directory = os.path.dirname(os.path.abspath(__file__))
+    folder_name = os.path.join(package_directory, '../data/retrained_with_counterexamples/cma_es')
+
     optimizer = Optimizer(
-        num_mugs=num_mugs, 
-        mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
+        num_mugs=num_mugs, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
         max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
-        num_processes=30, retrain_with_counterexamples=True)
+        num_processes=30, generate_counterexample_set=generate_counterexample_set,
+        retrain_with_counterexamples=True, folder_name=folder_name)
     # optimizer.run_rbfopt()
     optimizer.run_pycma()
+
+def run_random(generate_counterexample_set=False):
+    max_sec = None
+    max_counterexamples = None
+    max_iterations = None
+
+    # Parameters that are fairly static
+    mug_lower_bound = [-1.0, -1.0, -1.0, -1.0, -0.1, -0.1, 0.1]
+    mug_upper_bound = [1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.2]
+
+    num_mugs = 3
+
+    package_directory = os.path.dirname(os.path.abspath(__file__))
+    folder_name = os.path.join(package_directory, '../data/optimization_comparisons/random')
+
+    optimizer = Optimizer(
+        num_mugs=num_mugs, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
+        max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
+        num_processes=30, generate_counterexample_set=generate_counterexample_set,
+        retrain_with_counterexamples=False, folder_name=folder_name)
+    optimizer.run_random()
 
 def main():
     """
@@ -98,10 +124,13 @@ def main():
 
     # Find held-out set of counterexamples
 
-    train_initial_model()
+    # train_initial_model()
 
     # run_local_optimizers()
+
+    # run_global_optimizers(True)
     
+    run_random()
     # run_global_optimizers()
 
 if __name__ == "__main__":

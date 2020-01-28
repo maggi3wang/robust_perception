@@ -35,8 +35,8 @@ class EvalParallel3(object):
 
     def terminate(self):
         """free allocated processing pool"""
-        # self.pool.close()  # would wait for job termination
-        self.pool.terminate()  # terminate jobs regardless
+        self.pool.close()  # would wait for job termination
+        # self.pool.terminate()  # terminate jobs regardless
         self.pool.join()  # end spawning
 
     def __enter__(self):

@@ -179,7 +179,7 @@ class MugPipeline():
     def set_folder_name(self, folder_name):
         self.folder_name = folder_name
 
-    def run_meshcat(self, builder, scene_graph, visualizer):
+    def run_meshcat_visualizer(self, builder, scene_graph):
         # Add meshcat visualizer
         blockPrint()
         visualizer = builder.AddSystem(MeshcatVisualizer(
@@ -288,7 +288,7 @@ class MugPipeline():
         # print('poses: {}'.format(poses), flush=True)
 
         if self.meshcat_visualizer_desired:
-            self.run_meshcat_visualizer(builder, scene_graph, visualizer)
+            self.run_meshcat_visualizer(builder, scene_graph)
 
         # Add camera
         depth_camera_properties = DepthCameraProperties(
@@ -409,8 +409,11 @@ class MugPipeline():
         if self.folder_name is None:
             raise Exception('have not yet set the folder name')
 
-        folder_name = '{}/{}'.format(self.folder_name, 'run_with_retraining')
+        # TODO fix this horrendous way
+        # folder_name = '{}/{}'.format(self.folder_name, 'run_with_retraining')
+        folder_name = '{}/{}'.format(self.folder_name, 'optimization_run')
         filename = '{}/{}_{:05d}'.format(folder_name, n_objects, iteration_num)
+        print(filename)
 
         # Local optimizer
         if process_num is not None:
@@ -591,8 +594,13 @@ class MugPipeline():
         # print('after creating image', flush=True)
 
         # model_number_lock.acquire()
-        model_path = os.path.join(self.folder_name,
-            'models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
+        if self.retrain_with_counterexamples:
+            model_path = os.path.join(self.folder_name,
+                'models/mug_numeration_classifier_{:03d}.pth.tar'.format(model_number.value))
+        else:
+            model_path = os.path.join(self.package_directory,
+                '../data/mug_numeration_classifier_{:03d}.pth.tar'.format(0))
+
         (model, _, _) = MyNet.load_checkpoint(model_path, use_gpu=False)
         model.eval()
         # model_number_lock.release()

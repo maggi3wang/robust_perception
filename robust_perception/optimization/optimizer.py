@@ -51,17 +51,16 @@ class Optimizer():
 
     def __init__(self, num_mugs, mug_lower_bound, mug_upper_bound,
             max_iterations, max_time, max_counterexamples, num_processes,
-            retrain_with_counterexamples, mug_initial_poses=[]):
+            generate_counterexample_set, retrain_with_counterexamples, folder_name,
+            mug_initial_poses=[]):
 
         torch.multiprocessing.set_start_method('spawn')
         self.mug_initial_poses = mug_initial_poses
 
         self.mug_lower_bounds = []
-        for _ in range(num_mugs):
-            self.mug_lower_bounds += mug_lower_bound
-
         self.mug_upper_bounds = []
         for _ in range(num_mugs):
+            self.mug_lower_bounds += mug_lower_bound
             self.mug_upper_bounds += mug_upper_bound
 
         self.mug_pipeline = MugPipeline(
@@ -93,8 +92,8 @@ class Optimizer():
 
         self.retrain_with_counterexamples = retrain_with_counterexamples
 
-        # TODO make this global
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
+        self.folder_name = folder_name
 
         np.random.seed(int(codecs.encode(os.urandom(4), 'hex'), 32) & (2**32 - 1))
         random.seed(os.urandom(4))
@@ -122,19 +121,7 @@ class Optimizer():
             Note that the bounds have to be rescaled later, for pycma only.
         """
 
-                # optimize.minimize(mug_pipeline.run_inference, mug_initial_poses, 
-                #     args=(process_num, all_probabilities, total_iterations, num_counterexamples,
-                #         model_number, model_number_lock, counter_lock, all_probabilities_lock, file_q,
-                #         False, respawn_when_counterex),
-
-        # if self.retrain_with_counterexamples:
-        #     folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/run_with_retraining')
-        # else:
-        #     folder_name = os.path.join(self.package_directory, '../data/experiment4_dist/initial_optimization_run')
-
-        # folder_name = os.path.join(self.package_directory, '../data/optimization_comparisons/cma_es')
-        folder_name = os.path.join(self.package_directory, '../data/retrained_with_counterexamples/cma_es')
-        self.mug_pipeline.set_folder_name(folder_name)
+        self.mug_pipeline.set_folder_name(self.folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.PYCMA)
 
         self.mug_initial_poses = []
@@ -146,7 +133,7 @@ class Optimizer():
 
         print(self.mug_initial_poses)
 
-        iter_num = 10440
+        iter_num = 0
 
         start_time = time.time()
         elapsed_time = 0
@@ -155,17 +142,17 @@ class Optimizer():
         self.all_probabilities = manager.list()
         all_probabilities_lock = manager.Lock()
 
-        self.total_iterations = manager.Value('d', 10440)
-        self.num_counterexamples = manager.Value('d', 30)
+        self.total_iterations = manager.Value('d', 0)
+        self.num_counterexamples = manager.Value('d', 0)
 
-        self.model_number = manager.Value('d', 3)
+        self.model_number = manager.Value('d', 0)
         model_number_lock = manager.Lock()
 
         counter_lock = manager.Lock()
 
         file_q = manager.Queue()
 
-        filename = '{}/results.csv'.format(folder_name)
+        filename = '{}/results.csv'.format(self.folder_name)
         watcher = Process(target=self.listener, args=(file_q, filename))
         watcher.start()
 
@@ -256,7 +243,6 @@ class Optimizer():
             total_iterations, num_counterexamples, model_number, model_number_lock,
             counter_lock, all_probabilities_lock, file_q, use_input_initial_poses, mug_initial_poses,
             respawn_when_counterex):
-
         bounds = []
         method = ''
         if local_optimizer_method == OptimizerType.NELDER_MEAD:
@@ -351,10 +337,6 @@ class Optimizer():
 
         pool = Pool(self.num_processes + 1)
 
-        # filename = '{}/results.csv'.format(folder_name)
-        # print('filename', filename)
-        # watcher = pool.apply_async(self.listener, (file_q, filename))
-
         filename = '{}/results.csv'.format(folder_name)
         watcher = Process(target=self.listener, args=(file_q, filename))
         watcher.start()
@@ -386,6 +368,67 @@ class Optimizer():
 
         sys.stdout.flush()
 
+    def run_random(self):
+        """
+        for baseline purposes
+        """
+        manager = Manager()
+        self.all_probabilities = manager.list()
+        self.total_iterations = manager.Value('d', 0)
+        num_counterexamples = manager.Value('d', 0)
+        model_number = manager.Value('d', 0)
+        model_number_lock = manager.Lock()
+        counter_lock = manager.Lock()
+        all_probabilities_lock = manager.Lock()
+
+        file_q = manager.Queue()
+
+        self.mug_pipeline.set_folder_name(self.folder_name)
+        self.mug_pipeline.set_optimizer_type(OptimizerType.RANDOM)
+        pool = Pool(self.num_processes + 1)
+
+        # filename = '{}/results.csv'.format(folder_name)
+        # print('filename', filename)
+        # watcher = pool.apply_async(self.listener, (file_q, filename))
+
+        filename = '{}/results.csv'.format(self.folder_name)
+        watcher = Process(target=self.listener, args=(file_q, filename))
+        watcher.start()
+
+        iter_num = 0
+
+        try:
+            # change this from while true to terminate by timeout (try/except)
+            while True:
+                all_mug_initial_poses = []
+                for j in range(self.num_processes):
+                    mug_initial_poses = []
+                    for i in range(self.num_mugs):
+                        mug_initial_poses += \
+                            RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                            [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+                    all_mug_initial_poses.append(mug_initial_poses)
+
+                print(all_mug_initial_poses)
+
+                result = pool.starmap(
+                    self.mug_pipeline.run_inference,
+                    zip(all_mug_initial_poses, range(iter_num, iter_num + self.num_processes),
+                        repeat(self.all_probabilities), repeat(self.total_iterations),
+                        repeat(num_counterexamples), repeat(model_number),
+                        repeat(model_number_lock), repeat(counter_lock),
+                        repeat(all_probabilities_lock), repeat(file_q), repeat(False),
+                        repeat(False)))
+
+                iter_num += self.num_processes
+                print('new iter_num: {}'.format(iter_num))
+        except:
+            raise
+
+        pool.close()
+        pool.join()
+
+        sys.stdout.flush()
 
     ## Metadata and visualization tools
 
