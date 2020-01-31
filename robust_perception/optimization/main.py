@@ -108,7 +108,7 @@ def run_random(generate_counterexample_set=False):
     num_mugs = 3
 
     package_directory = os.path.dirname(os.path.abspath(__file__))
-    folder_name = os.path.join(package_directory, '../data/optimization_comparisons/random')
+    folder_name = os.path.join(package_directory, '../data/optimization_comparisons/random2')
 
     optimizer = Optimizer(
         num_mugs=num_mugs, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,

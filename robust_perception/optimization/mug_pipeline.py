@@ -395,9 +395,9 @@ class MugPipeline():
             if np.linalg.norm(velocities) < 0.05:
                 converged = True
 
-            # If haven't timed out in 5 min, just set converged = True
+            # If haven't timed out in 1 min, want to retry (use another pose)
 
-            if (time.time() - start_time) > 5 * 60:
+            if (time.time() - start_time) > 60:
                 converged = True
                 print('TIMED OUT IN FORWARD SIMULATION!', flush=True)
                 raise ForwardSimulationTimedOut
@@ -413,7 +413,7 @@ class MugPipeline():
         # folder_name = '{}/{}'.format(self.folder_name, 'run_with_retraining')
         folder_name = '{}/{}'.format(self.folder_name, 'optimization_run')
         filename = '{}/{}_{:05d}'.format(folder_name, n_objects, iteration_num)
-        print(filename)
+        # print(filename)
 
         # Local optimizer
         if process_num is not None:
@@ -541,7 +541,7 @@ class MugPipeline():
         if self.optimizer_type == OptimizerType.RANDOM:
             self.iteration_num = iteration_num
 
-        print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num), flush=True)
+        # print('process_num: {}, iteration_num: {}'.format(process_num, iteration_num), flush=True)
 
         if self.optimizer_type == OptimizerType.PYCMA:
             for i in range(len(poses)):
@@ -615,7 +615,7 @@ class MugPipeline():
 
         print('iteration: {}, probabilities: {}, probability: {}'.format(
             iteration_num, probabilities, probability), flush=True)
-        print('      {}'.format(self.initial_poses), flush=True)
+        # print('      {}'.format(self.initial_poses), flush=True)
 
         counterexample_set_dir = os.path.join(self.folder_name, 'counterexample_set')
 
@@ -691,14 +691,8 @@ class MugPipeline():
             raise FoundMaxCounterexamples
         counter_lock.release()
 
-        # if (self.optimizer_type == OptimizerType.NELDER_MEAD or
-        #         self.optimizer_type == OptimizerType.SLSQP):
         self.iteration_num += 1
 
-        # if self.optimizer_type == OptimizerType.RANDOM:
-        #     if not is_correct:
-        #         print('raising FoundCounterexample exception')
-        #         raise FoundCounterexample
         if self.optimizer_type == OptimizerType.RBFOPT:
             filename = os.path.join(self.folder_name, 'results.csv') 
 

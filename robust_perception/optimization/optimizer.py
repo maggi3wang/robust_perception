@@ -387,10 +387,6 @@ class Optimizer():
         self.mug_pipeline.set_optimizer_type(OptimizerType.RANDOM)
         pool = Pool(self.num_processes + 1)
 
-        # filename = '{}/results.csv'.format(folder_name)
-        # print('filename', filename)
-        # watcher = pool.apply_async(self.listener, (file_q, filename))
-
         filename = '{}/results.csv'.format(self.folder_name)
         watcher = Process(target=self.listener, args=(file_q, filename))
         watcher.start()
@@ -409,7 +405,7 @@ class Optimizer():
                             [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
                     all_mug_initial_poses.append(mug_initial_poses)
 
-                print(all_mug_initial_poses)
+                print('generated all_mug_initial_poses')
 
                 result = pool.starmap(
                     self.mug_pipeline.run_inference,
@@ -422,6 +418,8 @@ class Optimizer():
 
                 iter_num += self.num_processes
                 print('new iter_num: {}'.format(iter_num))
+                print('------------------------------------------------')
+                sys.stdout.flush()
         except:
             raise
 
