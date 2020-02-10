@@ -1,0 +1,89 @@
+generated all_mug_initial_poses
+iteration_num 1620
+iteration_num 1621
+iteration_num 1626
+iteration_num 1622
+iteration_num 1625
+iteration_num 1633
+iteration_num 1623
+iteration_num 1629
+iteration_num 1630
+iteration_num 1636
+iteration_num 1624
+iteration_num 1627
+iteration_num 1637
+iteration_num 1635
+iteration_num 1632
+iteration_num 1639
+iteration_num 1631
+iteration_num 1638
+iteration_num 1648
+iteration_num 1640
+iteration_num 1641
+iteration_num 1643
+iteration_num 1647
+iteration_num 1634
+iteration_num 1645
+iteration_num 1644
+iteration_num 1628
+iteration_num 1649
+iteration_num 1642
+iteration_num 1646
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01
+TIMED OUT IN FORWARD SIMULATION!
+EXCEPTION ForwardSimulationTimedOut, returning 1.01

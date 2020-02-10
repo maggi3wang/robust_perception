@@ -203,7 +203,7 @@ class MyNet():
 
         for i in range(self.num_classes):
             if class_total[i] > 0:
-                print('Accuracy of {} mugs: {}'.format(i+1, class_correct[i]/class_total[i]))
+                print('Accuracy of {} mugs: {}'.format(i+1, class_correct[i]/class_total[i]), flush=True)
                 class_acc[i] = class_correct[i]/class_total[i]
 
         # Compute the average acc and loss over all test images
@@ -216,7 +216,7 @@ class MyNet():
         Trains model with num_epochs epochs.
         """
 
-        print('training with {} epochs'.format(num_epochs))
+        print('training with {} epochs'.format(num_epochs), flush=True)
 
         model_accuracies_csv = os.path.join(self.models_dir, 'model_{:03d}.csv'.format(self.model_file_number))
         f = open(model_accuracies_csv, 'w')
@@ -264,9 +264,9 @@ class MyNet():
             train_loss = train_loss / self.training_set_size
 
             # Evaluate on the test set
-            print('test acc')
+            print('test acc', flush=True)
             test_acc, test_class_accs = self.evaluate_accuracy(self.test_loader, self.test_set_size)
-            print('counterex acc')
+            print('counterex acc', flush=True)
             counterexample_acc, counterexample_class_accs = self.evaluate_accuracy(self.counterexample_loader, self.counterexample_set_size)
 
             # Print the metrics
@@ -288,13 +288,13 @@ class MyNet():
             if test_acc > best_acc:
                 self.save_checkpoint(epoch)
                 best_acc = test_acc
-                print("New best acc is {}, epoch {}".format(best_acc, epoch))
+                print("New best acc is {}, epoch {}".format(best_acc, epoch), flush=True)
 
         # Move last epoch to current model and delete all other models
         model_file_base = 'mug_numeration_classifier_{:03d}.pth.tar'.format(self.model_file_number)
         model_file_name = os.path.join(self.models_dir, model_file_base)
 
-        print('copying {} to {}'.format(self.model_file_names[-1], model_file_name))
+        print('copying {} to {}'.format(self.model_file_names[-1], model_file_name), flush=True)
         shutil.copy(self.model_file_names[-1], model_file_name)
 
         for model_file_name in self.model_file_names:

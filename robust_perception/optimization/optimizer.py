@@ -110,7 +110,7 @@ class Optimizer():
                 num_counterexamples, model_number, model_number_lock, counter_lock,
                 all_probabilities_lock, file_q, False, True)
         except Exception as e:
-            print('exception {} occurred'.format(type(e).__name__))
+            print('exception {} occurred'.format(type(e).__name__), flush=True)
             raise e
 
         return prob
@@ -131,7 +131,7 @@ class Optimizer():
                 RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
                 [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
 
-        print(self.mug_initial_poses)
+        print(self.mug_initial_poses, flush=True)
 
         iter_num = 0
 
@@ -186,10 +186,10 @@ class Optimizer():
             #     print('timed out!', flush=True)
             #     break
             except FoundMaxCounterexamples:
-                print('found {} counterexamples!'.format(self.max_counterexamples))
+                print('found {} counterexamples!'.format(self.max_counterexamples), flush=True)
                 break
             except:
-                print("Unhandled unnamed exception in pycma")
+                print("Unhandled unnamed exception in pycma", flush=True)
                 raise
 
             iter_num += self.num_processes
@@ -199,9 +199,9 @@ class Optimizer():
 
         elapsed_time = time.time() - start_time
         print('ran for {} minutes! total number of iterations is {}, with {} sec/image'.format(
-            elapsed_time/60.0, self.total_iterations.value, elapsed_time/self.total_iterations.value))
+            elapsed_time/60.0, self.total_iterations.value, elapsed_time/self.total_iterations.value), flush=True)
         file_q.put('kill')
-        print('probabilities:', self.all_probabilities)
+        print('probabilities:', self.all_probabilities, flush=True)
         es.result_pretty()
 
         sys.stdout.flush()
@@ -221,7 +221,7 @@ class Optimizer():
 
         while True:
             try:
-                print('starting RBFOpt')
+                print('starting RBFOpt', flush=True)
                 bb = rbfopt.RbfoptUserBlackBox(
                     self.num_vars, 
                     self.mug_lower_bounds, self.mug_upper_bounds,
@@ -268,11 +268,10 @@ class Optimizer():
         while True:
             try:
                 folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), mug_pipeline.get_folder_name())
-                print(folder)
                 folder = '{}/optimization_run/{:03d}'.format(folder, process_num)
 
                 if not os.path.exists(folder):
-                    print('creating folder')
+                    print('creating folder', flush=True)
                     os.mkdir(folder)
 
                 assert(os.path.exists(folder))
@@ -356,7 +355,7 @@ class Optimizer():
             elapsed_time = time.time() - start_time
             print('ran for {} minutes! total number of iterations is {}, with {} sec/image'.format(
                 elapsed_time/60.0, self.total_iterations.value,
-                elapsed_time/self.total_iterations.value))
+                elapsed_time/self.total_iterations.value), flush=True)
 
             file_q.put('kill')
             pool.terminate()
@@ -364,7 +363,7 @@ class Optimizer():
 
         end_time = time.time()
 
-        print('probabilities:', self.all_probabilities)
+        print('probabilities:', self.all_probabilities, flush=True)
 
         sys.stdout.flush()
 
@@ -385,7 +384,7 @@ class Optimizer():
 
         self.mug_pipeline.set_folder_name(self.folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.RANDOM)
-        pool = Pool(self.num_processes + 1)
+        pool = Pool(self.num_processes + 1, maxtasksperchild=30)
 
         filename = '{}/results.csv'.format(self.folder_name)
         watcher = Process(target=self.listener, args=(file_q, filename))
@@ -405,7 +404,7 @@ class Optimizer():
                             [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
                     all_mug_initial_poses.append(mug_initial_poses)
 
-                print('generated all_mug_initial_poses')
+                print('generated all_mug_initial_poses', flush=True)
 
                 result = pool.starmap(
                     self.mug_pipeline.run_inference,
@@ -417,11 +416,11 @@ class Optimizer():
                         repeat(False)))
 
                 iter_num += self.num_processes
-                print('new iter_num: {}'.format(iter_num))
-                print('------------------------------------------------')
+                print('new iter_num: {}'.format(iter_num), flush=True)
+                print('------------------------------------------------', flush=True)
                 sys.stdout.flush()
-        except:
-            raise
+        except Exception as e:
+            raise e
 
         pool.close()
         pool.join()
