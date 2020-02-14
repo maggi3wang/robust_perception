@@ -24,8 +24,14 @@ from ..image_classification.simple_net import SimpleNet
 
 
 class MyNet():
-    def __init__(self, model_file_number, models_dir, training_set_dir, test_set_dir, counterexample_set_dir, num_workers=0):
-        self.model_file_number = model_file_number
+    def __init__(self, model_prefix, model_trial_number, num_data_added,
+            models_dir, training_set_dirs, test_set_dir, counterexample_set_dir=None, num_workers=0):
+        self.model_prefix = model_prefix    # this is 'random' or 'counterex'
+        self.model_trial_number = model_trial_number    # this is the trial number
+        self.num_data_added = num_data_added    # this is the number of data added to initial dataset
+
+        self.model_file_base_name = "{}_{:02d}_{:04d}".format(
+            self.model_prefix, self.model_trial_number, self.num_data_added)
 
         # Transformation for image
         # TODO try with different sizes
@@ -41,40 +47,57 @@ class MyNet():
         self.models_dir = os.path.join(self.package_dir, models_dir)
 
         # training_set_dir = '../data/experiment1/training_set' 
-        training_set_dir = os.path.join(self.package_dir, training_set_dir)
+        training_datasets = []
+        self.training_set_size = 0
+        for training_set_dir in training_set_dirs:
+            training_set_dir = os.path.join(self.package_dir, training_set_dir)
+            training_set = datasets.ImageFolder(root=training_set_dir, transform=training_transform)
+            training_datasets.append(training_set)
+
+            self.training_set_size += len(training_set)
+            print('There are {} images in this training set'.format(len(training_set)))
 
         # test_set_dir = '../data/experiment1/test_set'
         test_set_dir = os.path.join(self.package_dir, test_set_dir)
 
-        # counterexample_set_dir = '../data/experiment1/counterexample_set'
-        counterexample_set_dir = os.path.join(self.package_dir, counterexample_set_dir)
+        self.using_counterexample_set = False
+        if counterexample_set_dir:
+            self.using_counterexample_set = True
 
-        train_dataset = datasets.ImageFolder(root=training_set_dir, transform=training_transform)
+        # counterexample_set_dir = '../data/experiment1/counterexample_set'
+        if self.using_counterexample_set:
+            counterexample_set_dir = os.path.join(self.package_dir, counterexample_set_dir)
+
+        # train_dataset = datasets.ImageFolder(root=training_set_dir, transform=training_transform)
         test_dataset = datasets.ImageFolder(root=test_set_dir, transform=plain_transform)
-        counterexample_dataset = datasets.ImageFolder(root=counterexample_set_dir, transform=plain_transform)
 
         self.batch_size = 4
 
         self.train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=num_workers)
+            torch.utils.data.ConcatDataset(training_datasets), batch_size=self.batch_size,
+            shuffle=True, num_workers=num_workers)
 
         self.test_loader = torch.utils.data.DataLoader(
             test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers)
 
-        self.counterexample_loader = torch.utils.data.DataLoader(
-            counterexample_dataset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers)
+        if self.using_counterexample_set:
+            counterexample_dataset = datasets.ImageFolder(root=counterexample_set_dir, transform=plain_transform)
+            self.counterexample_loader = torch.utils.data.DataLoader(
+                counterexample_dataset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers)
+            self.counterexample_set_size = len(counterexample_dataset)
 
-        self.training_set_size = len(train_dataset)
         self.test_set_size = len(test_dataset)
-        self.counterexample_set_size = len(counterexample_dataset)
 
-        print('There are {} images in the training set'.format(self.training_set_size))
         print('There are {} images in the test set'.format(self.test_set_size))
-        print('There are {} images in the counterexample set'.format(self.counterexample_set_size))
+
+        if self.using_counterexample_set:
+            print('There are {} images in the counterexample set'.format(self.counterexample_set_size))
 
         print('There are {} batches in the train loader'.format(len(self.train_loader)))
         print('There are {} batches in the test loader'.format(len(self.test_loader)))
-        print('There are {} batches in the counterexample loader'.format(len(self.counterexample_loader)))
+
+        if self.using_counterexample_set:
+            print('There are {} batches in the counterexample loader'.format(len(self.counterexample_loader)))
 
         # Check if gpu support is available
         self.cuda_avail = torch.cuda.is_available()
@@ -155,9 +178,9 @@ class MyNet():
         Save and evaluate the model.
         """
 
-        model_file_base = "mug_numeration_classifier_{:03d}_epoch_{:03d}.pth.tar".format(
-            self.model_file_number, epoch)
-        filename = os.path.join(self.models_dir, model_file_base)
+        model_checkpoint_filename = "{}_{:04d}.pth.tar".format(
+            self.model_file_base_name, epoch)
+        filename = os.path.join(self.models_dir, model_checkpoint_filename)
 
         state = {'epoch': epoch, 'state_dict': self.model.state_dict(), 'optimizer': self.optimizer.state_dict()}
         torch.save(state, filename)
@@ -218,9 +241,12 @@ class MyNet():
 
         print('training with {} epochs'.format(num_epochs), flush=True)
 
-        model_accuracies_csv = os.path.join(self.models_dir, 'model_{:03d}.csv'.format(self.model_file_number))
+        model_accuracies_csv = os.path.join(self.models_dir, '{}.csv'.format(self.model_file_base_name))
         f = open(model_accuracies_csv, 'w')
-        f.write('epoch, training_loss, training_acc, test_acc, counterex_acc, is_new_best, test_class_1, test_class_2, test_class_3, test_class_4, test_class_5, counterex_class_3,\n')
+        if self.using_counterexample_set:
+            f.write('epoch, training_loss, training_acc, test_acc, counterex_acc, is_new_best, test_class_1, test_class_2, test_class_3, test_class_4, test_class_5, counterex_class_3,\n')
+        else:
+            f.write('epoch, training_loss, training_acc, test_acc, is_new_best, test_class_1, test_class_2, test_class_3, test_class_4, test_class_5,\n')
         f.flush()
 
         best_acc = 0.0
@@ -266,8 +292,10 @@ class MyNet():
             # Evaluate on the test set
             print('test acc', flush=True)
             test_acc, test_class_accs = self.evaluate_accuracy(self.test_loader, self.test_set_size)
-            print('counterex acc', flush=True)
-            counterexample_acc, counterexample_class_accs = self.evaluate_accuracy(self.counterexample_loader, self.counterexample_set_size)
+            
+            if self.using_counterexample_set:
+                print('counterex acc', flush=True)
+                counterexample_acc, counterexample_class_accs = self.evaluate_accuracy(self.counterexample_loader, self.counterexample_set_size)
 
             # Print the metrics
             # print("Epoch {}, Train Accuracy: {}, Train Loss: {}, Test Accuracy: {},"
@@ -278,10 +306,15 @@ class MyNet():
             # self.test_accuracies.append(test_acc)
             # self.counterexample_accuracies.append(counterexample_acc)
 
-            f.write('{:3d}, {:2.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1d}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f},\n'.format(
-                epoch, train_loss, train_acc, test_acc, counterexample_acc, test_acc > best_acc,
-                test_class_accs[0], test_class_accs[1], test_class_accs[2], test_class_accs[3], test_class_accs[4],
-                counterexample_class_accs[2]))
+            if self.using_counterexample_set:
+                f.write('{:3d}, {:2.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1d}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f},\n'.format(
+                    epoch, train_loss, train_acc, test_acc, counterexample_acc, test_acc > best_acc,
+                    test_class_accs[0], test_class_accs[1], test_class_accs[2], test_class_accs[3], test_class_accs[4],
+                    counterexample_class_accs[2]))
+            else:
+                f.write('{:3d}, {:2.5f}, {:1.5f}, {:1.5f}, {:1d}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f}, {:1.5f},\n'.format(
+                    epoch, train_loss, train_acc, test_acc, test_acc > best_acc,
+                    test_class_accs[0], test_class_accs[1], test_class_accs[2], test_class_accs[3], test_class_accs[4]))
             f.flush()
 
             # Save the model if the test acc is greater than our current best
@@ -291,8 +324,8 @@ class MyNet():
                 print("New best acc is {}, epoch {}".format(best_acc, epoch), flush=True)
 
         # Move last epoch to current model and delete all other models
-        model_file_base = 'mug_numeration_classifier_{:03d}.pth.tar'.format(self.model_file_number)
-        model_file_name = os.path.join(self.models_dir, model_file_base)
+        model_file_name = os.path.join(
+            self.models_dir, '{}.pth.tar'.format(self.model_file_base_name))
 
         print('copying {} to {}'.format(self.model_file_names[-1], model_file_name), flush=True)
         shutil.copy(self.model_file_names[-1], model_file_name)

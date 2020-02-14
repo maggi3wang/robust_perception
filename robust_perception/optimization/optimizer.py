@@ -51,8 +51,8 @@ class Optimizer():
 
     def __init__(self, num_mugs, mug_lower_bound, mug_upper_bound,
             max_iterations, max_time, max_counterexamples, num_processes,
-            generate_counterexample_set, retrain_with_counterexamples, folder_name,
-            mug_initial_poses=[]):
+            generate_counterexample_set, retrain_with_counterexamples,
+            retrain_with_random, model_trial_number, folder_name, mug_initial_poses=[]):
 
         torch.multiprocessing.set_start_method('spawn')
         self.mug_initial_poses = mug_initial_poses
@@ -65,7 +65,9 @@ class Optimizer():
 
         self.mug_pipeline = MugPipeline(
             num_mugs=num_mugs, max_counterexamples=max_counterexamples,
-            retrain_with_counterexamples=retrain_with_counterexamples)
+            generate_counterexample_set=generate_counterexample_set,
+            retrain_with_counterexamples=retrain_with_counterexamples,
+            retrain_with_random=retrain_with_random, model_trial_number=model_trial_number)
         self.num_mugs = num_mugs
 
         # Exit conditions, initialized to some large numbers
@@ -89,8 +91,6 @@ class Optimizer():
         self.num_processes = num_processes
 
         self.all_probabilities = None
-
-        self.retrain_with_counterexamples = retrain_with_counterexamples
 
         self.package_directory = os.path.dirname(os.path.abspath(__file__))
         self.folder_name = folder_name
@@ -121,7 +121,7 @@ class Optimizer():
             Note that the bounds have to be rescaled later, for pycma only.
         """
 
-        self.mug_pipeline.set_folder_name(self.folder_name)
+        self.mug_pipeline.set_folder_names(self.folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.PYCMA)
 
         self.mug_initial_poses = []
@@ -211,7 +211,7 @@ class Optimizer():
         Radial Basis Function interpolation.
         """
         folder_name = os.path.join(self.package_directory, '../data/optimization_comparisons/rbfopt')
-        self.mug_pipeline.set_folder_name(folder_name)
+        self.mug_pipeline.set_folder_names(folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.RBFOPT)
 
         # file_q = manager.Queue()
@@ -331,10 +331,10 @@ class Optimizer():
         elif local_optimizer_method == OptimizerType.SLSQP:
             folder_name = os.path.join(self.package_directory, "../data/optimization_comparisons/slsqp")
 
-        self.mug_pipeline.set_folder_name(folder_name)
+        self.mug_pipeline.set_folder_names(folder_name)
         self.mug_pipeline.set_optimizer_type(local_optimizer_method)
 
-        pool = Pool(self.num_processes + 1)
+        pool = Pool(self.num_processes + 1, maxtasksperchild=30)
 
         filename = '{}/results.csv'.format(folder_name)
         watcher = Process(target=self.listener, args=(file_q, filename))
@@ -369,31 +369,30 @@ class Optimizer():
 
     def run_random(self):
         """
-        for baseline purposes
+        For baseline and initial testing purposes.
         """
         manager = Manager()
         self.all_probabilities = manager.list()
         self.total_iterations = manager.Value('d', 0)
         num_counterexamples = manager.Value('d', 0)
-        model_number = manager.Value('d', 0)
-        model_number_lock = manager.Lock()
         counter_lock = manager.Lock()
         all_probabilities_lock = manager.Lock()
 
         file_q = manager.Queue()
 
-        self.mug_pipeline.set_folder_name(self.folder_name)
+        self.mug_pipeline.set_folder_names(self.folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.RANDOM)
-        pool = Pool(self.num_processes + 1, maxtasksperchild=30)
+        pool = Pool(self.num_processes + 1, maxtasksperchild=80)
 
         filename = '{}/results.csv'.format(self.folder_name)
         watcher = Process(target=self.listener, args=(file_q, filename))
         watcher.start()
 
         iter_num = 0
+        start_time = time.time()
 
         try:
-            # change this from while true to terminate by timeout (try/except)
+            # TODO: change this from while true to terminate by timeout (try/except)
             while True:
                 all_mug_initial_poses = []
                 for j in range(self.num_processes):
@@ -409,14 +408,14 @@ class Optimizer():
                 result = pool.starmap(
                     self.mug_pipeline.run_inference,
                     zip(all_mug_initial_poses, range(iter_num, iter_num + self.num_processes),
-                        repeat(self.all_probabilities), repeat(self.total_iterations),
-                        repeat(num_counterexamples), repeat(model_number),
-                        repeat(model_number_lock), repeat(counter_lock),
-                        repeat(all_probabilities_lock), repeat(file_q), repeat(False),
-                        repeat(False)))
+                        repeat(self.all_probabilities), repeat(all_probabilities_lock), 
+                        repeat(self.total_iterations), repeat(num_counterexamples), repeat(counter_lock),
+                        repeat(file_q), repeat(False), repeat(False)))
 
                 iter_num += self.num_processes
                 print('new iter_num: {}'.format(iter_num), flush=True)
+                total_min = (time.time() - start_time)/60.0
+                print('avg min/image: {}, total minutes: {}'.format(total_min/(iter_num + 1), total_min))
                 print('------------------------------------------------', flush=True)
                 sys.stdout.flush()
         except Exception as e:

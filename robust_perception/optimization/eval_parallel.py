@@ -7,7 +7,7 @@ class EvalParallel3(object):
     def __init__(self, fitness_function=None, number_of_processes=None):
         self.fitness_function = fitness_function
         self.processes = number_of_processes
-        self.pool = Pool(self.processes)
+        self.pool = Pool(self.processes, maxtasksperchild=30)
 
     def __call__(self, solutions, fitness_function=None, lst=None, args=(), timeout=None):
         """evaluate a list/sequence of solution-"vectors", return a list
