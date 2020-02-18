@@ -451,7 +451,7 @@ class MugPipeline():
 
             # TODO fix this horrendous way
             # folder_name = '{}/{}'.format(self.folder_name, 'run_with_retraining')
-            folder_name = '{}/{}'.format(self.folder_name, 'run')
+            folder_name = '{}/{}/{}'.format(self.folder_name, 'run', self.trial_folder)
             filename = '{}/{}_{:05d}'.format(folder_name, n_objects, iteration_num)
             # print(filename)
 

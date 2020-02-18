@@ -97,7 +97,7 @@ def run_global_optimizers(generate_counterexample_set=False):
     optimizer.run_pycma()
 
 def run_random(model_trial_number, generate_counterexample_set=False,
-        retrain_with_counterexamples=False, retrain_with_random=False):
+        retrain_with_counterexamples=False, retrain_with_random=False, max_added_to_training=1000):
     """
     generate_counterexample_set: creates a folder with all of the counterexamples found
     retrain_with_counterexamples: retrain model with counterexs
@@ -122,6 +122,7 @@ def run_random(model_trial_number, generate_counterexample_set=False,
 
     optimizer = Optimizer(
         num_mugs=num_mugs, mug_lower_bound=mug_lower_bound, mug_upper_bound=mug_upper_bound,
+        max_added_to_training=max_added_to_training,
         max_iterations=max_iterations, max_time=max_sec, max_counterexamples=max_counterexamples,
         num_processes=30, generate_counterexample_set=generate_counterexample_set,
         retrain_with_counterexamples=retrain_with_counterexamples,
@@ -138,9 +139,9 @@ def run_random_vs_counterex_experiment():
 
     # for counterex, rand in zip([False, True], [True, False]):
     # Run 10 models by retraining w random sampling, 10 models by retraining w counterexs
-    for model_trial_number in range(0, 10):
+    for model_trial_number in range(1, 10):
         run_random(model_trial_number=model_trial_number, generate_counterexample_set=False,
-            retrain_with_counterexamples=False, retrain_with_random=True)
+            retrain_with_counterexamples=False, retrain_with_random=True, max_added_to_training=1000)
         print('DONE WITH RANDOM TRIAL {}'.format(model_trial_number))
 
 def main():

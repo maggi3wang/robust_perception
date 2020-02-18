@@ -49,7 +49,7 @@ import torch
 class Optimizer():
     highest_process_num = 0     # Number of reinitializations for local optimizer
 
-    def __init__(self, num_mugs, mug_lower_bound, mug_upper_bound,
+    def __init__(self, num_mugs, mug_lower_bound, mug_upper_bound, max_added_to_training,
             max_iterations, max_time, max_counterexamples, num_processes,
             generate_counterexample_set, retrain_with_counterexamples,
             retrain_with_random, model_trial_number, folder_name, mug_initial_poses=[]):
@@ -71,6 +71,7 @@ class Optimizer():
         self.num_mugs = num_mugs
 
         # Exit conditions, initialized to some large numbers
+        self.max_added_to_training = max_added_to_training
         self.max_time = 10**8
         self.max_counterexamples = 10**10
         self.max_iterations = 10**6
@@ -367,6 +368,18 @@ class Optimizer():
 
         sys.stdout.flush()
 
+    def generate_all_mug_initial_poses(self):
+        # restart set if timed out (more than 5 min) and print an error message
+        all_mug_initial_poses = []
+        for j in range(self.num_processes):
+            mug_initial_poses = []
+            for i in range(self.num_mugs):
+                mug_initial_poses += \
+                    RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
+                    [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
+            all_mug_initial_poses.append(mug_initial_poses)
+        return all_mug_initial_poses
+
     def run_random(self):
         """
         For baseline and initial testing purposes.
@@ -382,7 +395,7 @@ class Optimizer():
 
         self.mug_pipeline.set_folder_names(self.folder_name)
         self.mug_pipeline.set_optimizer_type(OptimizerType.RANDOM)
-        pool = Pool(self.num_processes + 1, maxtasksperchild=80)
+        pool = Pool(self.num_processes + 1, maxtasksperchild=60)
 
         filename = '{}/results.csv'.format(self.folder_name)
         watcher = Process(target=self.listener, args=(file_q, filename))
@@ -390,27 +403,25 @@ class Optimizer():
 
         iter_num = 0
         start_time = time.time()
+        max_time_per_map = 120
 
         try:
             # TODO: change this from while true to terminate by timeout (try/except)
-            while True:
-                all_mug_initial_poses = []
-                for j in range(self.num_processes):
-                    mug_initial_poses = []
-                    for i in range(self.num_mugs):
-                        mug_initial_poses += \
-                            RollPitchYaw(np.random.uniform(0.0, 2.0*np.pi, size=3)).ToQuaternion().wxyz().tolist() + \
-                            [np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(0.1, 0.2)]
-                    all_mug_initial_poses.append(mug_initial_poses)
+            while ((self.retrain_with_random and self.total_iterations.value < self.max_added_to_training) or
+                   (self.retrain_with_counterexamples and num_counterexamples.value < self.max_added_to_training)):
+                result = None
 
-                print('generated all_mug_initial_poses', flush=True)
-
-                result = pool.starmap(
-                    self.mug_pipeline.run_inference,
-                    zip(all_mug_initial_poses, range(iter_num, iter_num + self.num_processes),
-                        repeat(self.all_probabilities), repeat(all_probabilities_lock), 
-                        repeat(self.total_iterations), repeat(num_counterexamples), repeat(counter_lock),
-                        repeat(file_q), repeat(False), repeat(False)))
+                while result is None:
+                    try:
+                        result = func_timeout(max_time_per_map, 
+                            pool.starmap(
+                            self.mug_pipeline.run_inference,
+                            zip(generate_all_mug_initial_poses(), range(iter_num, iter_num + self.num_processes),
+                                repeat(self.all_probabilities), repeat(all_probabilities_lock), 
+                                repeat(self.total_iterations), repeat(num_counterexamples), repeat(counter_lock),
+                                repeat(file_q), repeat(False), repeat(False))))
+                    except FunctionTimedOut:
+                        print('FUNCTION TIMED OUT, MORE THAN {} SECONDS!!!!'.format(max_time_per_map))
 
                 iter_num += self.num_processes
                 print('new iter_num: {}'.format(iter_num), flush=True)
