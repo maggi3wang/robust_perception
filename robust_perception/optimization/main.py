@@ -141,6 +141,7 @@ def run_random_vs_counterex_experiment():
     for model_trial_number in range(0, 10):
         run_random(model_trial_number=model_trial_number, generate_counterexample_set=False,
             retrain_with_counterexamples=False, retrain_with_random=True)
+        print('DONE WITH RANDOM TRIAL {}'.format(model_trial_number))
 
 def main():
     """
