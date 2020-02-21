@@ -14,14 +14,22 @@ def train_initial_model():
     Run initial model training
     """
 
-    models_dir = '../data/retrained_with_counterexamples/initial_training/models'
-    training_set_dir = '../data/retrained_with_counterexamples/initial_training/training_set'
-    test_set_dir = '../data/retrained_with_counterexamples/initial_training/test_set'
-    counterexample_set_dir = '../data/retrained_with_counterexamples/initial_training/counterexample_set'
+    models_dir = '../data/retrained_with_counterexamples/random1/models'
+    training_set_dir = '../data/retrained_with_counterexamples/random1/training_set/initial_training_set'
+    test_set_dir = '../data/retrained_with_counterexamples/random1/test_set'
+    # counterexample_set_dir = '../data/retrained_with_counterexamples/random1/counterexample_set'
 
-    net = MyNet(model_file_number=0, models_dir=models_dir, training_set_dir=training_set_dir,
-        test_set_dir=test_set_dir, counterexample_set_dir=counterexample_set_dir, num_workers=10)
-    net.train(num_epochs=50)
+    net = MyNet(
+        model_prefix='initial',
+        model_trial_number=0,
+        num_data_added=0,
+        models_dir=models_dir,
+        training_set_dirs=[training_set_dir],
+        test_set_dir=test_set_dir,
+        num_workers=30
+    )
+
+    net.train(num_epochs=60)
 
 def run_landscape_experiment():
     experiment = Experiment(num_mugs=3)
@@ -161,4 +169,5 @@ def main():
     run_random_vs_counterex_experiment()
 
 if __name__ == "__main__":
+    torch.multiprocessing.set_start_method('spawn')
     main()

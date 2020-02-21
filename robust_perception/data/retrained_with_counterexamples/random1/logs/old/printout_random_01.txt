@@ -1,0 +1,439 @@
+TITAN X (Pascal)
+iteration: 6, probabilities: [0.000004 0.000033 0.999431 0.000372 0.000160], probability: 0.9994311928749084
+probability: 0.9994311928749084
+iteration: 10, probabilities: [0.000003 0.000033 0.999886 0.000059 0.000020], probability: 0.999886155128479
+probability: 0.999886155128479
+iteration: 3, probabilities: [0.000003 0.000034 0.999782 0.000130 0.000052], probability: 0.9997819066047668
+probability: 0.9997819066047668
+iteration: 9, probabilities: [0.000003 0.000037 0.999901 0.000045 0.000014], probability: 0.9999006986618042
+probability: 0.9999006986618042
+iteration: 13, probabilities: [0.000001 0.000065 0.999902 0.000021 0.000011], probability: 0.9999016523361206
+probability: 0.9999016523361206
+iteration: 12, probabilities: [0.000003 0.000041 0.999813 0.000113 0.000031], probability: 0.9998127818107605
+probability: 0.9998127818107605
+iteration: 11, probabilities: [0.000002 0.000036 0.999918 0.000030 0.000014], probability: 0.9999182224273682
+probability: 0.9999182224273682
+iteration: 8, probabilities: [0.000002 0.000041 0.999901 0.000043 0.000014], probability: 0.9999006986618042
+probability: 0.9999006986618042
+iteration: 1, probabilities: [0.000005 0.000042 0.999650 0.000232 0.000071], probability: 0.9996500015258789
+probability: 0.9996500015258789
+iteration: 2, probabilities: [0.000003 0.000036 0.999863 0.000075 0.000022], probability: 0.9998629093170166
+probability: 0.9998629093170166
+iteration: 22, probabilities: [0.000004 0.000034 0.999626 0.000252 0.000083], probability: 0.999625563621521
+iteration: 18, probabilities: [0.000003 0.000031 0.999828 0.000099 0.000038], probability: 0.9998284578323364
+probability: 0.999625563621521
+probability: 0.9998284578323364
+iteration: 0, probabilities: [0.000002 0.000033 0.999913 0.000036 0.000016], probability: 0.9999129772186279
+probability: 0.9999129772186279
+iteration: 16, probabilities: [0.000001 0.000053 0.999912 0.000023 0.000011], probability: 0.9999116659164429
+probability: 0.9999116659164429
+iteration: 29, probabilities: [0.000003 0.000036 0.999824 0.000105 0.000032], probability: 0.9998243451118469
+probability: 0.9998243451118469
+iteration: 24, probabilities: [0.000002 0.000041 0.999866 0.000056 0.000034], probability: 0.9998663663864136
+probability: 0.9998663663864136
+iteration: 15, probabilities: [0.000002 0.000031 0.999816 0.000104 0.000047], probability: 0.9998157620429993
+probability: 0.9998157620429993
+iteration: 28, probabilities: [0.000002 0.000032 0.999857 0.000080 0.000028], probability: 0.9998570680618286
+probability: 0.9998570680618286
+iteration: 26, probabilities: [0.000004 0.000029 0.999570 0.000262 0.000134], probability: 0.9995703101158142
+probability: 0.9995703101158142
+iteration: 19, probabilities: [0.000001 0.000059 0.999905 0.000023 0.000012], probability: 0.9999053478240967
+probability: 0.9999053478240967
+iteration: 23, probabilities: [0.000002 0.000033 0.999848 0.000087 0.000030], probability: 0.9998476505279541
+iteration: 7, probabilities: [0.000005 0.000039 0.999332 0.000466 0.000158], probability: 0.9993324875831604
+probability: 0.9998476505279541
+probability: 0.9993324875831604
+iteration: 27, probabilities: [0.000003 0.000032 0.999806 0.000118 0.000042], probability: 0.9998056292533875
+probability: 0.9998056292533875
+iteration: 4, probabilities: [0.000002 0.000045 0.999897 0.000043 0.000013], probability: 0.9998965263366699
+probability: 0.9998965263366699
+iteration: 14, probabilities: [0.000003 0.000032 0.999705 0.000182 0.000077], probability: 0.9997054934501648
+probability: 0.9997054934501648
+iteration: 5, probabilities: [0.000003 0.000033 0.999777 0.000139 0.000048], probability: 0.9997773766517639
+probability: 0.9997773766517639
+iteration: 21, probabilities: [0.000006 0.000035 0.999092 0.000613 0.000254], probability: 0.9990921020507812
+probability: 0.9990921020507812
+iteration: 20, probabilities: [0.000002 0.000050 0.999882 0.000042 0.000024], probability: 0.9998823404312134
+probability: 0.9998823404312134
+iteration: 17, probabilities: [0.000025 0.000070 0.983070 0.013473 0.003363], probability: 0.983069896697998
+probability: 0.983069896697998
+iteration: 25, probabilities: [0.000003 0.000030 0.999833 0.000096 0.000040], probability: 0.9998327493667603
+probability: 0.9998327493667603
+new iter_num: 30
+avg min/image: 0.00737259631515831, total minutes: 0.22855048576990764
+------------------------------------------------
+iteration: 35, probabilities: [0.000003 0.000031 0.999749 0.000156 0.000061], probability: 0.9997487664222717
+probability: 0.9997487664222717
+iteration: 43, probabilities: [0.000002 0.000039 0.999900 0.000046 0.000014], probability: 0.9999001026153564
+probability: 0.9999001026153564
+iteration: 42, probabilities: [0.000003 0.000027 0.999803 0.000108 0.000059], probability: 0.9998027682304382
+probability: 0.9998027682304382
+iteration: 56, probabilities: [0.000006 0.002609 0.997291 0.000073 0.000021], probability: 0.9972909092903137
+probability: 0.9972909092903137
+iteration: 33, probabilities: [0.000002 0.000029 0.999894 0.000049 0.000026], probability: 0.999894380569458
+probability: 0.999894380569458
+iteration: 49, probabilities: [0.000004 0.000035 0.999541 0.000307 0.000113], probability: 0.999541163444519
+probability: 0.999541163444519
+iteration: 37, probabilities: [0.000004 0.000036 0.999509 0.000332 0.000119], probability: 0.9995094537734985
+probability: 0.9995094537734985
+iteration: 53, probabilities: [0.000002 0.000029 0.999863 0.000074 0.000031], probability: 0.9998630285263062
+probability: 0.9998630285263062
+iteration: 55, probabilities: [0.000001 0.000048 0.999915 0.000026 0.000010], probability: 0.9999154806137085
+probability: 0.9999154806137085
+iteration: 58, probabilities: [0.000006 0.000039 0.998918 0.000698 0.000338], probability: 0.9989181756973267
+probability: 0.9989181756973267
+iteration: 39, probabilities: [0.000074 0.158391 0.840876 0.000521 0.000138], probability: 0.8408759832382202
+probability: 0.8408759832382202
+iteration: 47, probabilities: [0.000002 0.000029 0.999888 0.000051 0.000030], probability: 0.9998877048492432
+probability: 0.9998877048492432
+iteration: 52, probabilities: [0.000002 0.000040 0.999909 0.000035 0.000014], probability: 0.9999090433120728
+probability: 0.9999090433120728
+iteration: 46, probabilities: [0.000008 0.000053 0.997874 0.001570 0.000495], probability: 0.99787437915802
+probability: 0.99787437915802
+iteration: 32, probabilities: [0.000003 0.000039 0.999698 0.000199 0.000061], probability: 0.999698281288147
+probability: 0.999698281288147
+iteration: 36, probabilities: [0.000003 0.000035 0.999692 0.000200 0.000069], probability: 0.9996919631958008
+probability: 0.9996919631958008
+iteration: 59, probabilities: [0.000002 0.000029 0.999849 0.000082 0.000039], probability: 0.9998488426208496
+probability: 0.9998488426208496
+iteration: 51, probabilities: [0.000003 0.000034 0.999770 0.000144 0.000050], probability: 0.9997697472572327
+probability: 0.9997697472572327
+iteration: 57, probabilities: [0.000002 0.000031 0.999899 0.000048 0.000020], probability: 0.9998986721038818
+probability: 0.9998986721038818
+iteration: 30, probabilities: [0.000005 0.000040 0.999055 0.000604 0.000295], probability: 0.9990546107292175
+retraining with random, iterations: 50
+There are 5367 images in this training set
+There are 50 images in this training set
+There are 3000 images in the test set
+There are 1355 batches in the train loader
+There are 750 batches in the test loader
+TITAN X (Pascal)
+training with 60 epochs
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9933333333333333
+Accuracy of 3 mugs: 0.9933333333333333
+Accuracy of 4 mugs: 0.9633333333333334
+Accuracy of 5 mugs: 0.9
+New best acc is 0.9699999690055847, epoch 0
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9766666666666667
+Accuracy of 4 mugs: 0.905
+Accuracy of 5 mugs: 0.8966666666666666
+test acc
+Accuracy of 1 mugs: 0.9716666666666667
+Accuracy of 2 mugs: 0.96
+Accuracy of 3 mugs: 0.8016666666666666
+Accuracy of 4 mugs: 0.855
+Accuracy of 5 mugs: 0.98
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9883333333333333
+Accuracy of 4 mugs: 0.9566666666666667
+Accuracy of 5 mugs: 0.9433333333333334
+New best acc is 0.9766666293144226, epoch 3
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.9633333333333334
+Accuracy of 5 mugs: 0.8066666666666666
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9933333333333333
+Accuracy of 3 mugs: 0.8966666666666666
+Accuracy of 4 mugs: 0.9283333333333333
+Accuracy of 5 mugs: 0.7516666666666667
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9883333333333333
+Accuracy of 3 mugs: 0.9566666666666667
+Accuracy of 4 mugs: 0.915
+Accuracy of 5 mugs: 0.9883333333333333
+test acc
+Accuracy of 1 mugs: 0.995
+Accuracy of 2 mugs: 0.83
+Accuracy of 3 mugs: 0.82
+Accuracy of 4 mugs: 0.5633333333333334
+Accuracy of 5 mugs: 0.9966666666666667
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.98
+Accuracy of 4 mugs: 0.905
+Accuracy of 5 mugs: 0.25166666666666665
+test acc
+Accuracy of 1 mugs: 0.0
+Accuracy of 2 mugs: 0.0
+Accuracy of 3 mugs: 0.0
+Accuracy of 4 mugs: 0.0
+Accuracy of 5 mugs: 1.0
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9883333333333333
+Accuracy of 4 mugs: 0.96
+Accuracy of 5 mugs: 0.9733333333333334
+New best acc is 0.9836666584014893, epoch 10
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.99
+Accuracy of 3 mugs: 0.9983333333333333
+Accuracy of 4 mugs: 0.9616666666666667
+Accuracy of 5 mugs: 0.95
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9916666666666667
+Accuracy of 4 mugs: 0.9616666666666667
+Accuracy of 5 mugs: 0.83
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9983333333333333
+Accuracy of 3 mugs: 0.99
+Accuracy of 4 mugs: 0.965
+Accuracy of 5 mugs: 0.8216666666666667
+test acc
+Accuracy of 1 mugs: 0.905
+Accuracy of 2 mugs: 0.5183333333333333
+Accuracy of 3 mugs: 0.2733333333333333
+Accuracy of 4 mugs: 0.12333333333333334
+Accuracy of 5 mugs: 0.9983333333333333
+test acc
+Accuracy of 1 mugs: 0.0
+Accuracy of 2 mugs: 0.0
+Accuracy of 3 mugs: 0.0
+Accuracy of 4 mugs: 0.0
+Accuracy of 5 mugs: 1.0
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9916666666666667
+Accuracy of 4 mugs: 0.9666666666666667
+Accuracy of 5 mugs: 0.9133333333333333
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9983333333333333
+Accuracy of 3 mugs: 0.9883333333333333
+Accuracy of 4 mugs: 0.9566666666666667
+Accuracy of 5 mugs: 0.9633333333333334
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9833333333333333
+Accuracy of 4 mugs: 0.9583333333333334
+Accuracy of 5 mugs: 0.92
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9483333333333334
+Accuracy of 4 mugs: 0.9266666666666666
+Accuracy of 5 mugs: 0.865
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9983333333333333
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.9583333333333334
+Accuracy of 5 mugs: 0.9116666666666666
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9983333333333333
+Accuracy of 3 mugs: 0.9833333333333333
+Accuracy of 4 mugs: 0.9233333333333333
+Accuracy of 5 mugs: 0.9833333333333333
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9966666666666667
+Accuracy of 4 mugs: 0.9433333333333334
+Accuracy of 5 mugs: 0.985
+New best acc is 0.9839999675750732, epoch 22
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9983333333333333
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.96
+Accuracy of 5 mugs: 0.915
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.99
+Accuracy of 4 mugs: 0.9683333333333334
+Accuracy of 5 mugs: 0.9516666666666667
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9766666666666667
+Accuracy of 4 mugs: 0.9483333333333334
+Accuracy of 5 mugs: 0.915
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.9616666666666667
+Accuracy of 5 mugs: 0.775
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.985
+Accuracy of 3 mugs: 0.9666666666666667
+Accuracy of 4 mugs: 0.9483333333333334
+Accuracy of 5 mugs: 0.9433333333333334
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9983333333333333
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.9566666666666667
+Accuracy of 5 mugs: 0.9083333333333333
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.98
+Accuracy of 3 mugs: 0.9766666666666667
+Accuracy of 4 mugs: 0.895
+Accuracy of 5 mugs: 0.8416666666666667
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9783333333333334
+Accuracy of 4 mugs: 0.9616666666666667
+Accuracy of 5 mugs: 0.9166666666666666
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.99
+Accuracy of 3 mugs: 0.975
+Accuracy of 4 mugs: 0.9466666666666667
+Accuracy of 5 mugs: 0.8116666666666666
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.9483333333333334
+Accuracy of 5 mugs: 0.86
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.985
+Accuracy of 4 mugs: 0.9583333333333334
+Accuracy of 5 mugs: 0.8933333333333333
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.985
+Accuracy of 3 mugs: 0.97
+Accuracy of 4 mugs: 0.9316666666666666
+Accuracy of 5 mugs: 0.875
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9983333333333333
+Accuracy of 4 mugs: 0.955
+Accuracy of 5 mugs: 0.9583333333333334
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9983333333333333
+Accuracy of 3 mugs: 0.9833333333333333
+Accuracy of 4 mugs: 0.955
+Accuracy of 5 mugs: 0.8616666666666667
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9933333333333333
+Accuracy of 3 mugs: 0.975
+Accuracy of 4 mugs: 0.9266666666666666
+Accuracy of 5 mugs: 0.9133333333333333
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9783333333333334
+Accuracy of 4 mugs: 0.9316666666666666
+Accuracy of 5 mugs: 0.8066666666666666
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.96
+Accuracy of 5 mugs: 0.9066666666666666
+test acc
+Accuracy of 1 mugs: 0.0
+Accuracy of 2 mugs: 0.0
+Accuracy of 3 mugs: 0.0
+Accuracy of 4 mugs: 0.0
+Accuracy of 5 mugs: 1.0
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9933333333333333
+Accuracy of 3 mugs: 0.9783333333333334
+Accuracy of 4 mugs: 0.9433333333333334
+Accuracy of 5 mugs: 0.8166666666666667
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9783333333333334
+Accuracy of 4 mugs: 0.955
+Accuracy of 5 mugs: 0.8716666666666667
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9783333333333334
+Accuracy of 4 mugs: 0.9533333333333334
+Accuracy of 5 mugs: 0.8733333333333333
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9933333333333333
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.9566666666666667
+Accuracy of 5 mugs: 0.8733333333333333
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9783333333333334
+Accuracy of 4 mugs: 0.9516666666666667
+Accuracy of 5 mugs: 0.8483333333333334
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9916666666666667
+Accuracy of 3 mugs: 0.985
+Accuracy of 4 mugs: 0.9633333333333334
+Accuracy of 5 mugs: 0.915
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.98
+Accuracy of 3 mugs: 0.96
+Accuracy of 4 mugs: 0.9316666666666666
+Accuracy of 5 mugs: 0.8616666666666667
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9816666666666667
+Accuracy of 4 mugs: 0.945
+Accuracy of 5 mugs: 0.84
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9816666666666667
+Accuracy of 4 mugs: 0.955
+Accuracy of 5 mugs: 0.9016666666666666
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9933333333333333
+Accuracy of 3 mugs: 0.9783333333333334
+Accuracy of 4 mugs: 0.9516666666666667
+Accuracy of 5 mugs: 0.86
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9966666666666667
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.9616666666666667
+Accuracy of 5 mugs: 0.9316666666666666
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.995
+Accuracy of 3 mugs: 0.9866666666666667
+Accuracy of 4 mugs: 0.9583333333333334
+Accuracy of 5 mugs: 0.8933333333333333
+test acc
+Accuracy of 1 mugs: 1.0
+Accuracy of 2 mugs: 0.9933333333333333
+Accuracy of 3 mugs: 0.98
+Accuracy of 4 mugs: 0.945
+Accuracy of 5 mugs: 0.8583333333333333

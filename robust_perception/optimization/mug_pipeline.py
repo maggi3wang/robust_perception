@@ -199,15 +199,33 @@ class MugPipeline():
             self.model_prefix = 'random'
         self.trial_folder = '{}_{:02d}'.format(self.model_prefix, self.model_trial_number)
 
+        # Create categories in training set directory
         if self.retrain_with_counterexamples or self.retrain_with_random:
-            # Create training set and model directory
             self.trial_training_set_dir = os.path.join(self.base_training_set_dir, self.trial_folder)
+
+            # Create training set directory
+            if not os.path.exists(self.trial_training_set_dir):
+                os.mkdir(self.trial_training_set_dir)
+
             for i in range(1, 5 + 1):
                 num_mug_trial_training_set_dir = os.path.join(self.trial_training_set_dir, str(i))
                 if not os.path.exists(num_mug_trial_training_set_dir):
                     os.mkdir(num_mug_trial_training_set_dir)
 
         self.training_set_dirs = [self.initial_training_set_dir, self.trial_training_set_dir]
+
+        # Create model directory
+        if not os.path.exists(os.path.join(self.models_dir, self.trial_folder)):
+            os.mkdir(os.path.join(self.models_dir, self.trial_folder))
+
+        initial_model_dir = os.path.join(self.models_dir, '{}/{}_{:04d}.pth.tar'.format(self.trial_folder, self.trial_folder, 0))
+        if not os.path.exists(initial_model_dir):
+            shutil.copy(os.path.join(self.folder_name, 'models/initial_00_0000.pth.tar'), initial_model_dir)
+
+        # Create run directory
+        self.run_dir = os.path.join(self.folder_name, 'run/{}'.format(self.trial_folder))
+        if not os.path.exists(self.run_dir):
+            os.mkdir(self.run_dir)
 
     def run_meshcat_visualizer(self, builder, scene_graph):
         # Add meshcat visualizer
@@ -451,14 +469,14 @@ class MugPipeline():
 
             # TODO fix this horrendous way
             # folder_name = '{}/{}'.format(self.folder_name, 'run_with_retraining')
-            folder_name = '{}/{}/{}'.format(self.folder_name, 'run', self.trial_folder)
-            filename = '{}/{}_{:05d}'.format(folder_name, n_objects, iteration_num)
+            # folder_name = '{}/{}/{}'.format(self.run_dir)
+            filename = '{}/{}_{:05d}'.format(self.run_dir, n_objects, iteration_num)
             # print(filename)
 
             # Local optimizer
             if process_num is not None:
                 filename = '{}/{:03d}/{}_{:05d}'.format(
-                    folder_name, process_num, n_objects, iteration_num)
+                    self.run_dir, process_num, n_objects, iteration_num)
 
             rgb_and_label_image_visualizer.save_image(filename)
 
@@ -668,13 +686,13 @@ class MugPipeline():
         # TODO clean up this horrendous way
         if self.retrain_with_counterexamples:
             model_path = os.path.join(self.models_dir,
-                '{}/{}_{:02d}_{:04d}.pth.tar'.format(
-                    self.trial_folder, self.model_prefix, self.model_trial_number,
+                '{}/{}_{:04d}.pth.tar'.format(
+                    self.trial_folder, self.trial_folder,
                     int(num_counterexamples.value / retrain_batch_size) * retrain_batch_size))
         elif self.retrain_with_random:
             model_path = os.path.join(self.models_dir,
-                '{}/{}_{:02d}_{:04d}.pth.tar'.format(
-                    self.trial_folder, self.model_prefix, self.model_trial_number,
+                '{}/{}_{:04d}.pth.tar'.format(
+                    self.trial_folder, self.trial_folder,
                     int(total_iterations.value / retrain_batch_size) * retrain_batch_size))
         else:
             model_path = os.path.join(self.package_directory,
