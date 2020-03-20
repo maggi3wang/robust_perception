@@ -11,6 +11,10 @@ class Plots():
             'test_class_1', 'test_class_2', 'test_class_3', 'test_class_4', 'test_class_5', 'counterex_class_3',
             'blank']
 
+        self.col_names = ['epoch', 'training_loss', 'training_acc', 'test_acc', 
+            'is_new_best', 'test_class_1', 'test_class_2', 'test_class_3', 'test_class_4', 'test_class_5',
+            'blank']
+
     def model_accuracy_over_counterexamples(self):
         # col_names = ['process_num', 'iter_num', 'probability']
         # TODO figure out why there's a blank
@@ -77,12 +81,14 @@ class Plots():
     def model_accuracy_over_epochs(self):
         package_directory = os.path.dirname(os.path.abspath(__file__))
         # models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/cma_es/models')
-        models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/initial_training/models')
+        # models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/initial_training/models')
+        models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/random1/models')
+        # models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/random1/models/old/random_00')
 
         epochs = []
         training_accs = []
         test_accs = []
-        counterexample_accs = []
+        # counterexample_accs = []
         training_losses = []
 
         for file in sorted(os.listdir(models_dir)):
@@ -93,7 +99,7 @@ class Plots():
                 epochs = data.epoch.to_numpy().astype(float)
                 training_accs = data.training_acc.to_numpy().astype(float)
                 test_accs = data.test_acc.to_numpy().astype(float)
-                counterexample_accs = data.counterexample_acc.to_numpy().astype(float)
+                # counterexample_accs = data.counterexample_acc.to_numpy().astype(float)
                 training_losses = data.training_loss.to_numpy().astype(float)
 
         axes = plt.gca()
@@ -102,7 +108,7 @@ class Plots():
 
         plt.plot(epochs, training_accs, label='training accs')
         plt.plot(epochs, test_accs, label='test accs')
-        plt.plot(epochs, counterexample_accs, label='counterexample accs')
+        # plt.plot(epochs, counterexample_accs, label='counterexample accs')
         plt.plot(epochs, training_losses, label='training_loss')
 
         plt.legend(loc='lower right')

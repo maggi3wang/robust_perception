@@ -8,6 +8,7 @@ from ..optimization.experiments import Experiment
 
 from ..optimization.model_trainer import MyNet
 
+import torch.multiprocessing
 
 def train_initial_model():
     """
@@ -26,7 +27,7 @@ def train_initial_model():
         models_dir=models_dir,
         training_set_dirs=[training_set_dir],
         test_set_dir=test_set_dir,
-        num_workers=30
+        num_workers=0
     )
 
     net.train(num_epochs=60)
@@ -147,7 +148,7 @@ def run_random_vs_counterex_experiment():
 
     # for counterex, rand in zip([False, True], [True, False]):
     # Run 10 models by retraining w random sampling, 10 models by retraining w counterexs
-    for model_trial_number in range(1, 10):
+    for model_trial_number in range(0, 3):
         run_random(model_trial_number=model_trial_number, generate_counterexample_set=False,
             retrain_with_counterexamples=False, retrain_with_random=True, max_added_to_training=1000)
         print('DONE WITH RANDOM TRIAL {}'.format(model_trial_number))
@@ -158,15 +159,14 @@ def main():
     """
 
     # Find held-out set of counterexamples
-
-    # train_initial_model()
+    train_initial_model()
+    # run_random_vs_counterex_experiment()
 
     # run_local_optimizers()
 
     # run_global_optimizers(True)
     
     # run_global_optimizers()
-    run_random_vs_counterex_experiment()
 
 if __name__ == "__main__":
     torch.multiprocessing.set_start_method('spawn')
