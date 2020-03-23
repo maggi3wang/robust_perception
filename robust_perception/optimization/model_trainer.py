@@ -30,6 +30,8 @@ from ..image_classification.simple_net import SimpleNet
 class MyNet():
     def __init__(self, model_prefix, model_trial_number, num_data_added,
             models_dir, training_set_dirs, test_set_dir, counterexample_set_dir=None, num_workers=0):
+        self.print = False
+
         self.model_prefix = model_prefix    # this is 'random' or 'counterex'
         self.model_trial_number = model_trial_number    # this is the trial number
         self.num_data_added = num_data_added    # this is the number of data added to initial dataset
@@ -70,9 +72,10 @@ class MyNet():
 
         test_dataset = datasets.ImageFolder(root=test_set_dir, transform=plain_transform)
 
-        self.batch_size = 64
+        self.batch_size = 32
 
-        print('training_datasets', training_datasets)
+        if self.print:
+            print('training_datasets', training_datasets)
 
         self.train_loader = torch.utils.data.DataLoader(
             torch.utils.data.ConcatDataset(training_datasets), batch_size=self.batch_size,
@@ -110,7 +113,8 @@ class MyNet():
         if self.cuda_avail:
             cuda.init()
             torch.cuda.set_device(0)
-            print(cuda.Device(torch.cuda.current_device()).name())
+            if self.print:
+                print(cuda.Device(torch.cuda.current_device()).name())
             self.model.cuda()
 
         self.initial_lr = 0.001
@@ -124,8 +128,6 @@ class MyNet():
         self.train_accuracies = []
         self.test_accuracies = []
         self.counterexample_accuracies = []
-
-        self.print = True
 
     def adjust_learning_rate(self, epoch):
         """
@@ -235,7 +237,8 @@ class MyNet():
 
         for i in range(self.num_classes):
             if class_total[i] > 0:
-                print('Accuracy of {} mugs: {}'.format(i+1, class_correct[i]/class_total[i]), flush=True)
+                if self.print:
+                    print('Accuracy of {} mugs: {}'.format(i+1, class_correct[i]/class_total[i]), flush=True)
                 class_acc[i] = class_correct[i]/class_total[i]
 
         if self.print:
@@ -274,9 +277,9 @@ class MyNet():
         training_loader_arr = []
 
         for images, labels in self.train_loader:
-            print('loading into arr', flush=True)
             training_loader_arr.append((images, labels))
-        print('finished creating training_loader_arr', flush=True)
+        if self.print:
+            print('finished creating training_loader_arr', flush=True)
 
         for epoch in range(num_epochs):
             if self.print:
@@ -294,7 +297,6 @@ class MyNet():
                 # images, labels = next(training_loader_iter)
 
             rand_arr = random.sample(range(0, len(self.train_loader)), len(self.train_loader))
-            print('created rand_arr', flush=True)
 
             for i in rand_arr:
                 images, labels = training_loader_arr[i]

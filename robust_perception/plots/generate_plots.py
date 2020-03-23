@@ -5,7 +5,9 @@ import pandas
 
 class Plots():
 
-    def __init__(self):
+    def __init__(self, models_dir):
+        self.models_dir = models_dir
+
         self.col_names = ['epoch', 'training_loss', 'training_acc', 'test_acc', 
             'counterexample_acc', 'is_new_best', 
             'test_class_1', 'test_class_2', 'test_class_3', 'test_class_4', 'test_class_5', 'counterex_class_3',
@@ -15,74 +17,90 @@ class Plots():
             'is_new_best', 'test_class_1', 'test_class_2', 'test_class_3', 'test_class_4', 'test_class_5',
             'blank']
 
-    def model_accuracy_over_counterexamples(self):
+    def model_accuracy_over_added_training_data(self):
         # col_names = ['process_num', 'iter_num', 'probability']
         # TODO figure out why there's a blank
 
         package_directory = os.path.dirname(os.path.abspath(__file__))
-        models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/cma_es/models')
+        # models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/cma_es/models')
 
         final_training_accs = []
         final_test_accs = []
-        final_counterexample_accs = []
+        # final_counterexample_accs = []
         final_num_epochs_to_best = []       # don't plot this, just print
+        folder_num = 0
 
-        for file in sorted(os.listdir(models_dir)):
-            filename = os.path.join(models_dir, file)
+        for folder in sorted(os.listdir(self.models_dir)):
+            folder_name = os.path.join(self.models_dir, folder)
 
-            if filename.endswith('.csv'):
-                data = pandas.read_csv(filename, delimiter=',', names=self.col_names, header=0)
-                print('filename', filename)
+            if os.path.isdir(folder_name) and '_' in folder and folder_num < 5:
+                final_training_accs.append([])
+                final_test_accs.append([])
+                final_num_epochs_to_best.append([])
 
-                # automate this / clean up
-                model_epoch = data.epoch.to_numpy().astype(int)
-                model_training_loss = data.training_loss.to_numpy().astype(float)
-                model_training_acc = data.training_acc.to_numpy().astype(float)
-                model_test_acc = data.test_acc.to_numpy().astype(float)
-                model_counterexample_acc = data.counterexample_acc.to_numpy().astype(float)
-                model_is_new_best = data.is_new_best.to_numpy().astype(int)
+                for file in sorted(os.listdir(folder_name)):
+                    if file.endswith('.csv'):
+                        filename = os.path.join(folder_name, file)
 
-                for i, is_new_best in reversed(list(enumerate(model_is_new_best))):
-                    if is_new_best == 1:
-                        # Get new best
-                        final_training_accs.append(model_training_acc[i])
-                        final_test_accs.append(model_test_acc[i])
-                        final_counterexample_accs.append(model_counterexample_acc[i])
-                        final_num_epochs_to_best.append(i)
-                        break
+                        data = pandas.read_csv(filename, delimiter=',', names=self.col_names, header=0)
+                        # print('filename', filename)
 
-        print(final_num_epochs_to_best)
+                        # automate this / clean up
+                        model_epoch = data.epoch.to_numpy().astype(int)
+                        model_training_loss = data.training_loss.to_numpy().astype(float)
+                        model_training_acc = data.training_acc.to_numpy().astype(float)
+                        model_test_acc = data.test_acc.to_numpy().astype(float)
+                        # model_counterexample_acc = data.counterexample_acc.to_numpy().astype(float)
+                        model_is_new_best = data.is_new_best.to_numpy().astype(int)
+
+                        for i, is_new_best in reversed(list(enumerate(model_is_new_best))):
+                            if is_new_best == 1:
+                                # Get new best
+                                # print(final_training_accs)
+                                final_training_accs[folder_num].append(model_training_acc[i])
+                                final_test_accs[folder_num].append(model_test_acc[i])
+                                # final_counterexample_accs.append(model_counterexample_acc[i])
+                                final_num_epochs_to_best[folder_num].append(i)
+                                break
+                folder_num += 1
+
+        # print(final_num_epochs_to_best)
         
-        fig, axes = plt.subplots(nrows=2, ncols=1)
+        # fig, axes = plt.subplots(nrows=1, ncols=1)
+        print(final_training_accs)
 
-        axes[0].plot(final_training_accs, color='r', label='Training accuracies')
-        axes[0].plot(final_test_accs, color='g', label='Test accuracies')
+        for i in range(folder_num):
+            plt.plot(final_training_accs[i], color='r', label='Training accuracies', linewidth=0.5)
+            plt.plot(final_test_accs[i], color='g', label='Test accuracies', linewidth=0.5)
 
-        axes[0].set_xlim([0, len(final_training_accs) - 1])
-        axes[0].set_ylim([0.98, 1])
+        plt.xlim([0, len(final_training_accs[0]) - 1])
+        plt.ylim([0.97, 1])
 
-        axes[1].plot(final_counterexample_accs, color='b', label='Counterexample accuracies')
+        # axes[1].plot(final_counterexample_accs, color='b', label='Counterexample accuracies')
 
-        axes[1].set_xlim([0, len(final_training_accs) - 1])
-        axes[1].set_ylim([0.0, 1.0])
-        axes[1].set_xlabel('Number of Counterexamples Added')
+        # axes[1].set_xlim([0, len(final_training_accs) - 1])
+        # axes[1].set_ylim([0.0, 1.0])
+        # axes[1].set_xlabel('Number of Counterexamples Added')
 
-        for axis in axes:
-            axis.set_ylabel('Accuracy')
+        # for axis in axes:
+        plt.ylabel('Accuracy')
 
-            axis.set_xticks(np.arange(0, len(final_training_accs), step=1))
+        plt.xticks(np.arange(0, len(final_training_accs[0]), step=1))
 
-            axis.grid()
-            axis.legend()
-            # axis.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        #plt.grid()
+        # axes.legend()
+        # axis.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
-        fig.savefig(os.path.join(package_directory, 'model_accuracies_over_counterexamples.png'))
+        #plt.savefig(os.path.join(package_directory, 'model_accuracies_over_counterexamples.png'))
+        plt.show()
 
     def model_accuracy_over_epochs(self):
-        package_directory = os.path.dirname(os.path.abspath(__file__))
+        """
+        Shows accuracies within one csv file.
+        """
+
         # models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/cma_es/models')
         # models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/initial_training/models')
-        models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/random1/models')
         # models_dir = os.path.join(package_directory, '../data/retrained_with_counterexamples/random1/models/old/random_00')
 
         epochs = []
@@ -91,8 +109,8 @@ class Plots():
         # counterexample_accs = []
         training_losses = []
 
-        for file in sorted(os.listdir(models_dir)):
-            filename = os.path.join(models_dir, file)
+        for file in sorted(os.listdir(self.models_dir)):
+            filename = os.path.join(self.models_dir, file)
 
             if filename.endswith('000.csv'):
                 data = pandas.read_csv(filename, delimiter=',', names=self.col_names, header=0)
@@ -117,8 +135,10 @@ class Plots():
 
 def main():
     # model_accuracy_over_counterexamples()
-    plot = Plots()
-    plot.model_accuracy_over_epochs()
+    package_directory = os.path.dirname(os.path.abspath(__file__))
+    plot = Plots(models_dir=os.path.join(package_directory, '../data/retrained_with_counterexamples/random1/models'))
+    # plot.model_accuracy_over_epochs()
+    plot.model_accuracy_over_added_training_data()
 
 if __name__ == "__main__":
     main()
